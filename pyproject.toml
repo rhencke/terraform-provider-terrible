@@ -1,0 +1,10 @@
+[project]
+name = "terrible"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "ansible>=13.3.0",
+    "tf>=1.1.0",
+]
