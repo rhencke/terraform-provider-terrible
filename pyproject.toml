@@ -8,3 +8,11 @@ dependencies = [
     "ansible>=13.3.0",
     "tf>=1.1.0",
 ]
+
+[project.scripts]
+terraform-provider-terrible = "terrible_provider.cli:main"
+install-provider = "terrible_provider.install:main"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
