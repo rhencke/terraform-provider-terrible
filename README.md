@@ -18,7 +18,7 @@ extension easy for Python-savvy operators.
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.12+
 - Terraform (for real usage)
 - Ansible (to execute playbooks)
 

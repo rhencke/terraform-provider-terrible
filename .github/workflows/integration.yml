@@ -1,0 +1,71 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install Python dependencies
+        run: uv sync
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q \
+            qemu-system-x86 \
+            qemu-utils \
+            cloud-image-utils \
+            openssh-client
+
+      - name: Enable KVM access
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install OpenTofu
+        run: |
+          curl -fsSL https://get.opentofu.org/install-opentofu.sh \
+            | sudo bash -s -- --install-method deb
+          tofu version
+
+      - name: Install provider
+        run: make install-provider
+
+      - name: Cache Alpine cloud image
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/terrible-tests
+          key: alpine-cloud-image-3.21.0
+
+      - name: Run integration tests
+        env:
+          TERRIBLE_INTEGRATION: "1"
+        run: uv run pytest tests/integration/ -v --timeout=240
+
+      - name: Upload VM log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vm-log
+          path: /tmp/pytest-*/integration*/vm.log
+          if-no-files-found: ignore

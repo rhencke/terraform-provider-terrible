@@ -205,3 +205,8 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Integration test artifacts
+tests/integration/terraform/.terraform/
+tests/integration/terraform/terraform.tfstate
+tests/integration/terraform/terraform.tfstate.backup

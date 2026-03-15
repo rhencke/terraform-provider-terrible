@@ -18,6 +18,9 @@ def _ansible_bin() -> str:
     return candidate if os.path.exists(candidate) else "ansible"
 
 
+_MODULE_TIMEOUT = 300  # seconds before an Ansible run is considered hung
+
+
 def _run_module(host_state: dict, module: str, args: Optional[str], *, check_only: bool = False) -> dict:
     """Run an Ansible module ad-hoc against a host via CLI, returning the result dict."""
     tmpdir = tempfile.mkdtemp()
@@ -26,8 +29,8 @@ def _run_module(host_state: dict, module: str, args: Optional[str], *, check_onl
         port = int(host_state.get("port") or 22)
         user = host_state.get("user")
         key = host_state.get("private_key_path")
-
         connection = host_state.get("connection")
+
         inv_line = f"{host} ansible_port={port}"
         if connection:
             inv_line += f" ansible_connection={connection}"
@@ -35,6 +38,8 @@ def _run_module(host_state: dict, module: str, args: Optional[str], *, check_onl
             inv_line += f" ansible_user={user}"
         if key:
             inv_line += f" ansible_ssh_private_key_file={key}"
+        if connection != "local":
+            inv_line += " ansible_ssh_extra_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'"
 
         inv_path = os.path.join(tmpdir, "inventory")
         with open(inv_path, "w") as f:
@@ -49,12 +54,18 @@ def _run_module(host_state: dict, module: str, args: Optional[str], *, check_onl
         if args:
             cmd += ["-a", args]
 
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=_MODULE_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            return {"failed": True, "msg": f"Ansible module timed out after {_MODULE_TIMEOUT}s"}
 
         files = os.listdir(results_dir)
         if files:
-            with open(os.path.join(results_dir, files[0])) as f:
-                return json.load(f)
+            try:
+                with open(os.path.join(results_dir, files[0])) as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, OSError) as exc:
+                return {"failed": True, "msg": f"Could not parse Ansible result: {exc}"}
 
         return {"failed": True, "msg": proc.stderr or proc.stdout}
     finally:
@@ -95,10 +106,10 @@ class TerribleTaskBase(Resource):
             )
         return h
 
-    def _execute(self, diags, planned: dict) -> tuple[dict, bool]:
+    def _execute(self, diags, planned: dict) -> tuple[dict, bool, dict]:
         host = self._resolve_host(planned["host_id"], diags)
         if host is None:
-            return {}, False
+            return {}, False, {}
 
         # Collect module args from planned state as JSON (avoids k=v parsing ambiguity
         # and correctly handles free-form modules like command/shell)

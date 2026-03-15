@@ -1,5 +1,8 @@
 import json
+import logging
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 from tf.schema import Schema, Attribute
 from tf.types import String
@@ -20,14 +23,15 @@ class TerribleProvider(Provider):
         if self._state_file.exists():
             try:
                 self._state = json.loads(self._state_file.read_text())
-            except Exception:
+            except Exception as exc:
+                log.warning("Could not load state from %s: %s — starting empty", self._state_file, exc)
                 self._state = {}
 
     def _save_state(self):
         try:
             self._state_file.write_text(json.dumps(self._state, indent=2, sort_keys=True))
-        except Exception:
-            pass
+        except Exception as exc:
+            log.error("Failed to persist state to %s: %s", self._state_file, exc)
 
     def get_model_prefix(self) -> str:
         return "terrible_"

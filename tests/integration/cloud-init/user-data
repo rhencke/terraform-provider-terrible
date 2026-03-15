@@ -1,0 +1,14 @@
+#cloud-config
+users:
+  - name: alpine
+    groups: wheel
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/sh
+    ssh_authorized_keys:
+      - __SSH_PUBKEY_PLACEHOLDER__
+
+packages:
+  - python3
+
+runcmd:
+  - echo "terrible-vm-ready" > /tmp/vm_ready
