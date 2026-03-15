@@ -10,9 +10,8 @@ terraform {
 provider "terrible" {}
 
 resource "terrible_host" "web" {
-  host = "192.168.1.100"
-  port = 22
-  user = "ubuntu"
+  host       = "localhost"
+  connection = "local"
 }
 
 resource "terrible_ping" "connectivity" {

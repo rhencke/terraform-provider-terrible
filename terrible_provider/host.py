@@ -28,6 +28,12 @@ class TerribleHost(Resource):
                     optional=True,
                     sensitive=True,
                 ),
+                Attribute(
+                    "connection",
+                    String(),
+                    description="Ansible connection type (e.g. local, ssh, docker). Defaults to ssh.",
+                    optional=True,
+                ),
             ]
         )
 

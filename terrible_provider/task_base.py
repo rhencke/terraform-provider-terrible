@@ -27,7 +27,10 @@ def _run_module(host_state: dict, module: str, args: Optional[str], *, check_onl
         user = host_state.get("user")
         key = host_state.get("private_key_path")
 
+        connection = host_state.get("connection")
         inv_line = f"{host} ansible_port={port}"
+        if connection:
+            inv_line += f" ansible_connection={connection}"
         if user:
             inv_line += f" ansible_user={user}"
         if key:
@@ -69,6 +72,7 @@ class TerribleTaskBase(Resource):
     _module_name: str = ""
     _schema = None
     _return_attr_names: set[str] = set()
+    _return_attr_coercers: dict = {}
     _check_mode_support: str = "none"
 
     def __init__(self, provider):
@@ -96,31 +100,35 @@ class TerribleTaskBase(Resource):
         if host is None:
             return {}, False
 
-        # Collect module args from planned state (exclude framework fields)
+        # Collect module args from planned state as JSON (avoids k=v parsing ambiguity
+        # and correctly handles free-form modules like command/shell)
         skip = {"id", "host_id", "result", "changed", "triggers"}
-        args_parts = [
-            f"{k}={v}"
+        args_dict = {
+            k: v
             for k, v in planned.items()
-            if k not in skip and v is not None
-        ]
-        args_str = " ".join(args_parts) or None
+            if k not in skip and v not in (None, Unknown)
+        }
+        args_str = json.dumps(args_dict) if args_dict else None
 
         result = _run_module(host, self.__class__._module_name, args_str)
         changed = bool(result.get("changed", False))
         if result.get("failed") or result.get("unreachable"):
             diags.add_error("Ansible task failed", result.get("msg", "unknown error"))
 
-        # Unpack individual return attributes from the result
+        # Unpack individual return attributes; default absent ones to None so
+        # no Unknown values leak through from the plan phase.
+        # Apply per-attribute coercers to handle mis-documented module RETURN types.
+        coercers = self.__class__._return_attr_coercers
         return_attrs = {
-            name: result[name]
+            name: coercers[name](result.get(name)) if name in coercers else result.get(name)
             for name in self.__class__._return_attr_names
-            if name in result
         }
         return result, changed, return_attrs
 
     def create(self, ctx: CreateContext, planned: dict) -> Optional[dict]:
         result, changed, return_attrs = self._execute(ctx.diagnostics, planned)
         new_id = uuid.uuid4().hex
+        # Merge: planned inputs first, then computed outputs (overrides any Unknown from plan)
         state = {**planned, **return_attrs, "id": new_id, "result": result, "changed": changed}
         self._prov._state[new_id] = state
         self._prov._save_state()
@@ -132,8 +140,8 @@ class TerribleTaskBase(Resource):
         if host is None:
             return None
         skip = {"id", "host_id", "result", "changed", "triggers"}
-        args_parts = [f"{k}={v}" for k, v in current.items() if k not in skip and v is not None]
-        args_str = " ".join(args_parts) or None
+        args_dict = {k: v for k, v in current.items() if k not in skip and v not in (None, Unknown)}
+        args_str = json.dumps(args_dict) if args_dict else None
         return _run_module(host, self.__class__._module_name, args_str, check_only=True)
 
     def read(self, ctx: ReadContext, current: dict) -> Optional[dict]:

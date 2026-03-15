@@ -116,7 +116,10 @@ def _build_schema(options: dict, returns: dict) -> tuple[Schema, set[str]]:
     Returns the Schema and the set of return-attribute names (for use in _execute).
     """
     option_names = set(options)
-    return_names = {k for k in returns if k not in _FRAMEWORK_NAMES}
+    # Only return-only names: fields declared in RETURN but NOT in options.
+    # Fields present in both are user-settable inputs that Ansible echoes back;
+    # we keep the user's value rather than overwriting it with the result.
+    return_names = {k for k in returns if k not in _FRAMEWORK_NAMES and k not in option_names}
 
     attrs: list[Attribute] = list(_FRAMEWORK_ATTRS)
 
@@ -159,10 +162,41 @@ def _resource_name_for(fqcn: str) -> str:
     return fqcn.replace(".", "_").replace("-", "_")
 
 
+def _coercers_for(schema: Schema, return_names: set[str]) -> dict:
+    """
+    Build a {attr_name: callable} map that coerces ansible result values to
+    the Python type expected by the tf schema, guarding against mis-documented
+    module RETURN blocks (e.g. command's `msg` is typed bool but ships a str).
+    """
+    coercers = {}
+    for attr in schema.attributes:
+        if attr.name not in return_names:
+            continue
+        if isinstance(attr.type, Bool):
+            coercers[attr.name] = lambda v: bool(v) if v is not None else None
+        elif isinstance(attr.type, Number):
+            def _num(v):
+                if v is None:
+                    return None
+                try:
+                    return int(v)
+                except (ValueError, TypeError):
+                    try:
+                        return float(v)
+                    except (ValueError, TypeError):
+                        return None
+            coercers[attr.name] = _num
+        else:
+            # String / NormalizedJson: accept as-is; NormalizedJson encodes on the way out
+            coercers[attr.name] = lambda v: v
+    return coercers
+
+
 def make_task_class(fqcn: str, options: dict, returns: dict, check_mode_support: str = "none") -> type:
     """Return a unique TerribleTaskBase subclass for an Ansible task type."""
     rname = _resource_name_for(fqcn)
     schema, return_names = _build_schema(options, returns)
+    coercers = _coercers_for(schema, return_names)
     return type(
         f"Terrible_{rname}",
         (TerribleTaskBase,),
@@ -170,6 +204,7 @@ def make_task_class(fqcn: str, options: dict, returns: dict, check_mode_support:
             "_module_name": fqcn,
             "_schema": schema,
             "_return_attr_names": return_names,
+            "_return_attr_coercers": coercers,
             "_check_mode_support": check_mode_support,
             "get_name": classmethod(lambda cls, _n=rname: _n),
         },
