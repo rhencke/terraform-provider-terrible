@@ -9,9 +9,12 @@ dynamically subclass TerribleTaskBase for each discovered task type.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
+import sqlite3
+from pathlib import Path
 from typing import Optional
 
 import yaml
@@ -211,18 +214,86 @@ def make_task_class(fqcn: str, options: dict, returns: dict, check_mode_support:
     )
 
 
+def _cache_db_path() -> Path:
+    cache_dir = Path.home() / ".cache" / "tf-python-provider"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir / "discovery.db"
+
+
+def _open_cache() -> sqlite3.Connection:
+    db = sqlite3.connect(_cache_db_path())
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS discovery_cache (
+            ansible_version TEXT NOT NULL,
+            fqcn            TEXT NOT NULL,
+            options_json    TEXT NOT NULL,
+            returns_json    TEXT NOT NULL,
+            check_mode      TEXT NOT NULL,
+            PRIMARY KEY (ansible_version, fqcn)
+        )
+    """)
+    db.commit()
+    return db
+
+
+def _load_cached(db: sqlite3.Connection, ansible_version: str) -> Optional[list[type]]:
+    rows = db.execute(
+        "SELECT fqcn, options_json, returns_json, check_mode FROM discovery_cache WHERE ansible_version = ?",
+        (ansible_version,),
+    ).fetchall()
+    if not rows:
+        return None
+    resources = []
+    for fqcn, options_json, returns_json, check_mode in rows:
+        try:
+            klass = make_task_class(fqcn, json.loads(options_json), json.loads(returns_json), check_mode)
+            resources.append(klass)
+        except Exception as exc:
+            log.debug("Failed to restore cached class for %s: %s", fqcn, exc)
+    return resources
+
+
+def _save_cache(db: sqlite3.Connection, ansible_version: str, rows: list[tuple]) -> None:
+    # Drop stale entries for other Ansible versions to keep the DB small.
+    db.execute("DELETE FROM discovery_cache WHERE ansible_version != ?", (ansible_version,))
+    db.executemany(
+        "INSERT OR REPLACE INTO discovery_cache VALUES (?, ?, ?, ?, ?)",
+        rows,
+    )
+    db.commit()
+
+
 def discover_task_resources() -> list[type]:
     """
     Walk all Ansible module paths and return one Resource subclass per
     discovered task type.
+
+    Results are cached in SQLite (~/.cache/tf-python-provider/discovery.db)
+    keyed by Ansible version, so the expensive filesystem walk and YAML
+    parsing only happens once per Ansible installation.
     """
     try:
+        import ansible
         from ansible.plugins.loader import module_loader
     except ImportError:
         log.warning("ansible not importable; no task resources will be registered")
         return []
 
+    ansible_version = ansible.__version__
+
+    try:
+        db = _open_cache()
+        cached = _load_cached(db, ansible_version)
+        if cached is not None:
+            log.info("Loaded %d Ansible task types from cache (ansible %s)", len(cached), ansible_version)
+            return cached
+    except Exception as exc:
+        log.debug("Discovery cache unavailable: %s", exc)
+        db = None
+
+    # Cache miss — do the full filesystem walk.
     resources: list[type] = []
+    cache_rows: list[tuple] = []
     seen_fqcns: set[str] = set()
 
     for path in module_loader.all(path_only=True):
@@ -251,9 +322,18 @@ def discover_task_resources() -> list[type]:
         try:
             klass = make_task_class(fqcn, options, returns, check_mode_support=support)
             resources.append(klass)
+            cache_rows.append((ansible_version, fqcn, json.dumps(options), json.dumps(returns), support))
             log.debug("Registered task type: %s", fqcn)
         except Exception as exc:
             log.debug("Failed to build class for %s: %s", fqcn, exc)
 
     log.info("Discovered %d Ansible task types", len(resources))
+
+    if db is not None and cache_rows:
+        try:
+            _save_cache(db, ansible_version, cache_rows)
+            log.debug("Saved discovery cache for ansible %s", ansible_version)
+        except Exception as exc:
+            log.debug("Failed to save discovery cache: %s", exc)
+
     return resources
