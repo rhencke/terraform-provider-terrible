@@ -22,6 +22,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.0"
+    }
     terrible = {
       source  = "local/terrible/terrible"
       version = "0.0.1"

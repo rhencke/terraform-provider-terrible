@@ -32,25 +32,34 @@ Terraform provider. For development, install the Python dependencies from
 python -m pip install -e .
 ```
 
-## Usage (example)
+## Usage
 
-This repository includes a small runnable helper so the example works
-immediately with only Python available. To run the example and reproduce the
-playbook's effect (create/write the example file), run:
+Install in editable mode and run the provider in dev (reattach) mode:
 
 ```bash
-python3 examples/run_example.py
+pip install -e .
+make run-provider       # prints TF_REATTACH_PROVIDERS
+make example-fresh      # install, wipe state, auto-apply the example config
 ```
 
-There is also a conceptual Terraform snippet in `examples/terraform/main.tf`
-showing how an `ansible` provider could be used in HCL; that snippet is for
-illustration only and not required to run the included example.
+See [`examples/`](examples/) for working Terraform configurations demonstrating
+task chains, parallel execution, triggers, and cloud VM provisioning.
 
 ## Development
 
-- Edit `main.py` to explore the provider's entrypoint and behavior.
-- Run and iterate locally; the code is intentionally small so you can read and
-	modify it quickly.
+The provider lives in `terrible_provider/`. Key files:
+
+- `terrible_provider/provider.py` — provider entrypoint and state management
+- `terrible_provider/task_base.py` — in-process Ansible execution engine
+- `terrible_provider/discovery.py` — dynamic Ansible module → Terraform resource mapping
+- `terrible_provider/host.py` — `terrible_host` resource
+
+Run tests:
+
+```bash
+pytest -q                          # unit tests
+make integration-test              # full Terraform + Ansible integration tests
+```
 
 ## Contributing
 

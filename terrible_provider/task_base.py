@@ -57,26 +57,12 @@ _run_module_lock = threading.Lock()  # TQM is not thread-safe; serialise all cal
 
 
 # ---------------------------------------------------------------------------
-# Core execution
+# Ansible callback — defined at module level (no closures needed)
 # ---------------------------------------------------------------------------
 
-def _run_module(host_state: dict, module: str, args: Optional[str], *, check_only: bool = False) -> dict:
-    """Run an Ansible module in-process via TaskQueueManager."""
-    _ensure_ansible_initialized()
-
-    from ansible.parsing.dataloader import DataLoader
-    from ansible.inventory.manager import InventoryManager
-    from ansible.vars.manager import VariableManager
-    from ansible.playbook.play import Play
-    from ansible.executor.task_queue_manager import TaskQueueManager
+def _make_callback():
+    """Return a fresh CallbackBase instance that captures the task result."""
     from ansible.plugins.callback import CallbackBase
-
-    host = host_state["host"]
-    port = int(host_state.get("port") or 22)
-    user = host_state.get("user")
-    key = host_state.get("private_key_path")
-    connection = host_state.get("connection")
-    args_dict = json.loads(args) if args else {}
 
     class _CB(CallbackBase):
         result = None
@@ -92,6 +78,30 @@ def _run_module(host_state: dict, module: str, args: Optional[str], *, check_onl
 
         def v2_runner_on_unreachable(self, r):
             self.result = {'unreachable': True, **dict(r.result)}
+
+    return _CB()
+
+
+# ---------------------------------------------------------------------------
+# Core execution
+# ---------------------------------------------------------------------------
+
+def _run_module(host_state: dict, module: str, args: Optional[str], *, check_only: bool = False) -> dict:
+    """Run an Ansible module in-process via TaskQueueManager."""
+    _ensure_ansible_initialized()
+
+    from ansible.parsing.dataloader import DataLoader
+    from ansible.inventory.manager import InventoryManager
+    from ansible.vars.manager import VariableManager
+    from ansible.playbook.play import Play
+    from ansible.executor.task_queue_manager import TaskQueueManager
+
+    host = host_state["host"]
+    port = int(host_state.get("port") or 22)
+    user = host_state.get("user")
+    key = host_state.get("private_key_path")
+    connection = host_state.get("connection")
+    args_dict = json.loads(args) if args else {}
 
     with _run_module_lock:
         # Ansible's TQM calls signal.signal() internally, which fails in non-main
@@ -119,7 +129,7 @@ def _run_module(host_state: dict, module: str, args: Optional[str], *, check_onl
             )
 
         vm  = VariableManager(loader=loader, inventory=inv)
-        cb  = _CB()
+        cb  = _make_callback()
         play = Play().load(dict(
             name='terrible_task', hosts='target', gather_facts='no',
             check_mode=check_only, diff=check_only,
@@ -150,6 +160,15 @@ def _run_module(host_state: dict, module: str, args: Optional[str], *, check_onl
                 _signal.signal = _real_signal  # type: ignore[method-assign]
 
     return cb.result or {"failed": True, "msg": "No result captured from Ansible"}
+
+
+_SKIP_ATTRS = frozenset({"id", "host_id", "result", "changed", "triggers"})
+
+
+def _build_args_str(state: dict) -> Optional[str]:
+    """Serialize non-framework, non-null state entries as a JSON args string for Ansible."""
+    args = {k: v for k, v in state.items() if k not in _SKIP_ATTRS and v not in (None, Unknown)}
+    return json.dumps(args) if args else None
 
 
 # ---------------------------------------------------------------------------
@@ -212,13 +231,7 @@ class TerribleTaskBase(Resource):
 
         # Collect module args from planned state as JSON (avoids k=v parsing ambiguity
         # and correctly handles free-form modules like command/shell)
-        skip = {"id", "host_id", "result", "changed", "triggers"}
-        args_dict = {
-            k: v
-            for k, v in planned.items()
-            if k not in skip and v not in (None, Unknown)
-        }
-        args_str = json.dumps(args_dict) if args_dict else None
+        args_str = _build_args_str(planned)
 
         result = _run_module(host, self.__class__._module_name, args_str)
         changed = bool(result.get("changed", False))
@@ -249,10 +262,7 @@ class TerribleTaskBase(Resource):
         host = self._resolve_host(current["host_id"], diags)
         if host is None:
             return None
-        skip = {"id", "host_id", "result", "changed", "triggers"}
-        args_dict = {k: v for k, v in current.items() if k not in skip and v not in (None, Unknown)}
-        args_str = json.dumps(args_dict) if args_dict else None
-        return _run_module(host, self.__class__._module_name, args_str, check_only=True)
+        return _run_module(host, self.__class__._module_name, _build_args_str(current), check_only=True)
 
     def read(self, ctx: ReadContext, current: dict) -> Optional[dict]:
         stored = self._prov._state.get(current["id"])

@@ -43,6 +43,8 @@ class TerribleProvider(Provider):
         return "local/terrible/terrible"
 
     def validate_config(self, diags: Diagnostics, config: dict):
+        # No validation needed: state_file is an optional free-form path with no
+        # constraints that can be checked before the filesystem is accessed.
         pass
 
     def configure_provider(self, diags: Diagnostics, config: dict):
@@ -52,8 +54,8 @@ class TerribleProvider(Provider):
         if not self._state_file.parent.exists():
             try:
                 self._state_file.parent.mkdir(parents=True, exist_ok=True)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("Could not create state file directory %s: %s", self._state_file.parent, exc)
         self._load_state()
 
     def get_data_sources(self) -> list:

@@ -55,7 +55,7 @@ class TerribleHost(Resource):
 
     def update(self, ctx: UpdateContext, current: dict, planned: dict) -> Optional[dict]:
         rid = current["id"]
-        state = {**self._prov._state.get(rid, {}), **planned, "id": rid}
+        state = {**planned, "id": rid}
         self._prov._state[rid] = state
         self._prov._save_state()
         return state

@@ -1,15 +1,5 @@
 #!/usr/bin/env bash
-# Thin wrapper to run the Python installer script from the repo root.
+# Thin wrapper around the install-provider console script entry point.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_ROOT="${SCRIPT_DIR}/.."
-
-PY_SCRIPT="${REPO_ROOT}/scripts/install_provider.py"
-
-if [ ! -f "$PY_SCRIPT" ]; then
-  echo "Missing installer script: $PY_SCRIPT" >&2
-  exit 2
-fi
-
-python3 "$PY_SCRIPT" "$@"
+exec python3 -m terrible_provider.install "$@"

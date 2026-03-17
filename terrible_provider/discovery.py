@@ -119,19 +119,24 @@ def _build_schema(options: dict, returns: dict) -> tuple[Schema, set[str]]:
     Returns the Schema and the set of return-attribute names (for use in _execute).
     """
     option_names = set(options)
-    # Only return-only names: fields declared in RETURN but NOT in options.
-    # Fields present in both are user-settable inputs that Ansible echoes back;
-    # we keep the user's value rather than overwriting it with the result.
+    # Return-only: declared in RETURN but not in options.
+    # Used by _execute to know which attributes to pull from the Ansible result.
+    # Fields present in both are passthroughs: user sets them, Ansible echoes them
+    # back. We do NOT include those in return_names so _execute keeps the user value.
     return_names = {k for k in returns if k not in _FRAMEWORK_NAMES and k not in option_names}
 
     attrs: list[Attribute] = list(_FRAMEWORK_ATTRS)
 
-    # Input-only options
+    # Options (input attributes)
     for name, spec in options.items():
         if name in _FRAMEWORK_NAMES or not isinstance(spec, dict):
             continue
         required = bool(spec.get("required", False))
-        in_return = name in return_names
+        # Fields present in both options and RETURN are passthroughs: the user sets
+        # them and Ansible echoes the same value back. We keep the user's value rather
+        # than overwriting it with the result, so these are plain optional inputs
+        # (not computed). Only return-only fields (in return_names) are computed.
+        in_return = name in return_names  # always False for option names by construction
         attrs.append(
             Attribute(
                 name,
@@ -165,6 +170,18 @@ def _resource_name_for(fqcn: str) -> str:
     return fqcn.replace(".", "_").replace("-", "_")
 
 
+def _coerce_number(v):
+    if v is None:
+        return None
+    try:
+        return int(v)
+    except (ValueError, TypeError):
+        try:
+            return float(v)
+        except (ValueError, TypeError):
+            return None
+
+
 def _coercers_for(schema: Schema, return_names: set[str]) -> dict:
     """
     Build a {attr_name: callable} map that coerces ansible result values to
@@ -178,21 +195,16 @@ def _coercers_for(schema: Schema, return_names: set[str]) -> dict:
         if isinstance(attr.type, Bool):
             coercers[attr.name] = lambda v: bool(v) if v is not None else None
         elif isinstance(attr.type, Number):
-            def _num(v):
-                if v is None:
-                    return None
-                try:
-                    return int(v)
-                except (ValueError, TypeError):
-                    try:
-                        return float(v)
-                    except (ValueError, TypeError):
-                        return None
-            coercers[attr.name] = _num
-        else:
-            # String / NormalizedJson: accept as-is; NormalizedJson encodes on the way out
-            coercers[attr.name] = lambda v: v
+            coercers[attr.name] = _coerce_number
+        # else: String / NormalizedJson — accept as-is; NormalizedJson encodes on the way out
     return coercers
+
+
+def _make_get_name(name: str):
+    @classmethod  # type: ignore[misc]
+    def get_name(cls) -> str:
+        return name
+    return get_name
 
 
 def make_task_class(fqcn: str, options: dict, returns: dict, check_mode_support: str = "none") -> type:
@@ -209,7 +221,7 @@ def make_task_class(fqcn: str, options: dict, returns: dict, check_mode_support:
             "_return_attr_names": return_names,
             "_return_attr_coercers": coercers,
             "_check_mode_support": check_mode_support,
-            "get_name": classmethod(lambda cls, _n=rname: _n),
+            "get_name": _make_get_name(rname),
         },
     )
 
@@ -281,6 +293,7 @@ def discover_task_resources() -> list[type]:
 
     ansible_version = ansible.__version__
 
+    db = None
     try:
         db = _open_cache()
         cached = _load_cached(db, ansible_version)
@@ -289,6 +302,11 @@ def discover_task_resources() -> list[type]:
             return cached
     except Exception as exc:
         log.debug("Discovery cache unavailable: %s", exc)
+        if db is not None:
+            try:
+                db.close()
+            except Exception:
+                pass
         db = None
 
     # Cache miss — do the full filesystem walk.
@@ -296,44 +314,51 @@ def discover_task_resources() -> list[type]:
     cache_rows: list[tuple] = []
     seen_fqcns: set[str] = set()
 
-    for path in module_loader.all(path_only=True):
-        if not path or not path.endswith(".py") or os.path.basename(path).startswith("_"):
-            continue
+    try:
+        for path in module_loader.all(path_only=True):
+            if not path or not path.endswith(".py") or os.path.basename(path).startswith("_"):
+                continue
 
-        fqcn = _fqcn_for_path(path)
-        if fqcn is None or fqcn in seen_fqcns:
-            continue
-        seen_fqcns.add(fqcn)
+            fqcn = _fqcn_for_path(path)
+            if fqcn is None or fqcn in seen_fqcns:
+                continue
+            seen_fqcns.add(fqcn)
 
-        try:
-            with open(path, encoding="utf-8", errors="replace") as f:
-                source = f.read()
-        except OSError:
-            continue
+            try:
+                with open(path, encoding="utf-8", errors="replace") as f:
+                    source = f.read()
+            except OSError:
+                continue
 
-        doc = _parse_yaml_block(source, _DOC_RE)
-        if doc is None:
-            continue
+            doc = _parse_yaml_block(source, _DOC_RE)
+            if doc is None:
+                continue
 
-        options = doc.get("options") or {}
-        returns = _parse_yaml_block(source, _RET_RE) or {}
-        support = _check_mode_support(doc)
+            options = doc.get("options") or {}
+            returns = _parse_yaml_block(source, _RET_RE) or {}
+            support = _check_mode_support(doc)
 
-        try:
-            klass = make_task_class(fqcn, options, returns, check_mode_support=support)
-            resources.append(klass)
-            cache_rows.append((ansible_version, fqcn, json.dumps(options), json.dumps(returns), support))
-            log.debug("Registered task type: %s", fqcn)
-        except Exception as exc:
-            log.debug("Failed to build class for %s: %s", fqcn, exc)
+            try:
+                klass = make_task_class(fqcn, options, returns, check_mode_support=support)
+                resources.append(klass)
+                cache_rows.append((ansible_version, fqcn, json.dumps(options), json.dumps(returns), support))
+                log.debug("Registered task type: %s", fqcn)
+            except Exception as exc:
+                log.debug("Failed to build class for %s: %s", fqcn, exc)
 
-    log.info("Discovered %d Ansible task types", len(resources))
+        log.info("Discovered %d Ansible task types", len(resources))
 
-    if db is not None and cache_rows:
-        try:
-            _save_cache(db, ansible_version, cache_rows)
-            log.debug("Saved discovery cache for ansible %s", ansible_version)
-        except Exception as exc:
-            log.debug("Failed to save discovery cache: %s", exc)
+        if db is not None and cache_rows:
+            try:
+                _save_cache(db, ansible_version, cache_rows)
+                log.debug("Saved discovery cache for ansible %s", ansible_version)
+            except Exception as exc:
+                log.debug("Failed to save discovery cache: %s", exc)
+    finally:
+        if db is not None:
+            try:
+                db.close()
+            except Exception:
+                pass
 
     return resources

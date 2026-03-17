@@ -28,7 +28,20 @@ PROVIDER_NS = "terrible"
 PROVIDER_TYPE = "terrible"
 PROVIDER_VERSION = "0.0.1"
 
-_PROVIDER_ENTRYPOINT = REPO_ROOT / ".venv" / "bin" / "terraform-provider-terrible"
+def _find_provider_entrypoint() -> Path:
+    # Prefer the venv-local binary; fall back to wherever it's on PATH.
+    venv_bin = REPO_ROOT / ".venv" / "bin" / "terraform-provider-terrible"
+    if venv_bin.exists():
+        return venv_bin
+    on_path = shutil.which("terraform-provider-terrible")
+    if on_path:
+        return Path(on_path)
+    raise RuntimeError(
+        "terraform-provider-terrible not found in .venv/bin/ or on PATH.\n"
+        "Run 'uv sync' or 'pip install -e .' first."
+    )
+
+_PROVIDER_ENTRYPOINT = _find_provider_entrypoint()
 _REATTACH_RE = _re.compile(r"TF_REATTACH_PROVIDERS='(.+)'")
 
 
@@ -48,11 +61,6 @@ def provider_process():
     process alive across all terraform commands in the session, eliminating
     per-command Python startup (~340ms each).
     """
-    assert _PROVIDER_ENTRYPOINT.exists(), (
-        f"Provider entrypoint not found: {_PROVIDER_ENTRYPOINT}\n"
-        "Run 'uv sync' or 'pip install -e .' first."
-    )
-
     env = {**os.environ, "PYTHONUNBUFFERED": "1"}
     proc = subprocess.Popen(
         [str(_PROVIDER_ENTRYPOINT), "--dev"],
