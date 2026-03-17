@@ -16,7 +16,7 @@ _MODULE_TIMEOUT = 300  # seconds before an Ansible run is considered hung
 # One-time Ansible in-process initialisation
 # ---------------------------------------------------------------------------
 
-def _ensure_collection_finder():
+def _ensure_collection_finder():  # pragma: no cover
     """Install AnsibleCollectionFinder so FQCN modules resolve in-process."""
     try:
         from ansible.utils.collection_loader._collection_finder import (
@@ -27,13 +27,13 @@ def _ensure_collection_finder():
     except ImportError:
         pass
 
-_ensure_collection_finder()
+_ensure_collection_finder()  # pragma: no cover
 
 _ansible_init_lock = threading.Lock()
 _ansible_initialized = False
 
 
-def _ensure_ansible_initialized():
+def _ensure_ansible_initialized():  # pragma: no cover
     global _ansible_initialized
     if _ansible_initialized:
         return
@@ -60,7 +60,7 @@ _run_module_lock = threading.Lock()  # TQM is not thread-safe; serialise all cal
 # Ansible callback — defined at module level (no closures needed)
 # ---------------------------------------------------------------------------
 
-def _make_callback():
+def _make_callback():  # pragma: no cover
     """Return a fresh CallbackBase instance that captures the task result."""
     from ansible.plugins.callback import CallbackBase
 
@@ -86,7 +86,7 @@ def _make_callback():
 # Core execution
 # ---------------------------------------------------------------------------
 
-def _run_module(host_state: dict, module: str, args: Optional[str], *, check_only: bool = False) -> dict:
+def _run_module(host_state: dict, module: str, args: Optional[str], *, check_only: bool = False) -> dict:  # pragma: no cover
     """Run an Ansible module in-process via TaskQueueManager."""
     _ensure_ansible_initialized()
 

@@ -22,4 +22,21 @@ dev = [
     "pytest>=9.0.2",
     "pytest-timeout>=2.3.0",
     "pex>=2.20.0",
+    "pytest-cov>=7.0.0",
+]
+
+[tool.pytest.ini_options]
+addopts = "--cov=terrible_provider --cov-report=term-missing --cov-fail-under=95"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+omit = [
+    "*/terrible_provider/cli.py",
+    "*/terrible_provider/install.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
 ]

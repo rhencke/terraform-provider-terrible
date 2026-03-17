@@ -231,3 +231,8 @@ class TestSuccessfulRead:
 
         _, kwargs = mock_run.call_args
         assert kwargs.get("check_only") is True
+
+    def test_get_schema_returns_schema(self):
+        DSClass = _make_ds_class([Attribute("host_id", String(), required=True),
+                                   Attribute("result", NormalizedJson(), computed=True)])
+        assert DSClass.get_schema() is DSClass._schema

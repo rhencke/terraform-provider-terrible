@@ -1,0 +1,105 @@
+"""Unit tests for TerribleHost resource."""
+
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from tf.iface import CreateContext, DeleteContext, ImportContext, ReadContext, UpdateContext
+from tf.utils import Diagnostics
+
+from terrible_provider.host import TerribleHost
+
+
+def _ctx(klass):
+    return klass(Diagnostics(), "terrible_host")
+
+
+def _provider():
+    prov = MagicMock()
+    prov._state = {}
+    prov._save_state = MagicMock()
+    return prov
+
+
+class TestTerribleHost:
+    def test_get_name(self):
+        assert TerribleHost.get_name() == "host"
+
+    def test_get_schema_has_expected_attrs(self):
+        names = {a.name for a in TerribleHost.get_schema().attributes}
+        assert {"id", "host", "port", "user", "private_key_path", "connection"} == names
+
+    def test_create_assigns_id(self):
+        prov = _provider()
+        inst = TerribleHost(prov)
+        state = inst.create(_ctx(CreateContext), {"host": "10.0.0.1"})
+        assert "id" in state
+        assert len(state["id"]) == 32  # uuid4 hex
+
+    def test_create_defaults_port(self):
+        prov = _provider()
+        inst = TerribleHost(prov)
+        state = inst.create(_ctx(CreateContext), {"host": "10.0.0.1", "port": None})
+        assert state["port"] == 22
+
+    def test_create_preserves_explicit_port(self):
+        prov = _provider()
+        inst = TerribleHost(prov)
+        state = inst.create(_ctx(CreateContext), {"host": "10.0.0.1", "port": 2222})
+        assert state["port"] == 2222
+
+    def test_create_saves_to_provider_state(self):
+        prov = _provider()
+        inst = TerribleHost(prov)
+        state = inst.create(_ctx(CreateContext), {"host": "10.0.0.1"})
+        assert state["id"] in prov._state
+        prov._save_state.assert_called_once()
+
+    def test_read_returns_stored_state(self):
+        prov = _provider()
+        prov._state["abc"] = {"id": "abc", "host": "10.0.0.1"}
+        inst = TerribleHost(prov)
+        result = inst.read(_ctx(ReadContext), {"id": "abc"})
+        assert result == {"id": "abc", "host": "10.0.0.1"}
+
+    def test_read_returns_none_when_missing(self):
+        prov = _provider()
+        inst = TerribleHost(prov)
+        assert inst.read(_ctx(ReadContext), {"id": "nonexistent"}) is None
+
+    def test_update_replaces_state(self):
+        prov = _provider()
+        prov._state["abc"] = {"id": "abc", "host": "old"}
+        inst = TerribleHost(prov)
+        result = inst.update(
+            _ctx(UpdateContext), {"id": "abc"}, {"host": "new", "port": 22}
+        )
+        assert result["host"] == "new"
+        assert result["id"] == "abc"
+        assert prov._state["abc"]["host"] == "new"
+        prov._save_state.assert_called_once()
+
+    def test_delete_removes_from_state(self):
+        prov = _provider()
+        prov._state["abc"] = {"id": "abc"}
+        inst = TerribleHost(prov)
+        inst.delete(_ctx(DeleteContext), {"id": "abc"})
+        assert "abc" not in prov._state
+        prov._save_state.assert_called_once()
+
+    def test_delete_missing_id_is_safe(self):
+        prov = _provider()
+        inst = TerribleHost(prov)
+        inst.delete(_ctx(DeleteContext), {"id": None})  # no crash
+
+    def test_import_returns_state_by_id(self):
+        prov = _provider()
+        prov._state["abc"] = {"id": "abc", "host": "10.0.0.1"}
+        inst = TerribleHost(prov)
+        result = inst.import_(_ctx(ImportContext), "abc")
+        assert result == {"id": "abc", "host": "10.0.0.1"}
+
+    def test_import_returns_none_when_missing(self):
+        prov = _provider()
+        inst = TerribleHost(prov)
+        assert inst.import_(_ctx(ImportContext), "gone") is None
