@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -30,6 +31,42 @@ from terrible_provider.discovery import (
 )
 from terrible_provider.task_base import TerribleTaskBase
 from terrible_provider.task_datasource import TerribleTaskDataSource
+
+
+# ---------------------------------------------------------------------------
+# Fake module file content for filesystem-walk tests
+# ---------------------------------------------------------------------------
+
+_FAKE_MODULE_FULL = '''\
+DOCUMENTATION = """
+short_description: Fake module with full check mode
+options:
+  path:
+    description: A path.
+    type: str
+    required: true
+attributes:
+  check_mode:
+    support: full
+"""
+RETURN = """
+stat:
+  description: Stat result.
+  type: dict
+"""
+'''
+
+_FAKE_MODULE_NONE = '''\
+DOCUMENTATION = """
+short_description: Fake module no check mode
+options:
+  name:
+    description: A name.
+    type: str
+"""
+RETURN = """
+"""
+'''
 
 
 # ---------------------------------------------------------------------------
@@ -416,3 +453,135 @@ class TestDiscoverTaskResources:
              patch.object(loader.module_loader, "all", return_value=[]):
             resources, datasources = discover_task_resources()
         assert resources == []
+
+    def test_ansible_not_importable(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "ansible", None)
+        resources, datasources = discover_task_resources()
+        assert resources == []
+        assert datasources == []
+
+    def test_cache_load_raises_closes_db(self):
+        db_mock = MagicMock()
+        import ansible.plugins.loader as loader
+        with patch("terrible_provider.discovery._open_cache", return_value=db_mock), \
+             patch("terrible_provider.discovery._load_cached", side_effect=RuntimeError("load failed")), \
+             patch.object(loader.module_loader, "all", return_value=[]):
+            discover_task_resources()
+        db_mock.close.assert_called()
+
+    def test_cache_load_raises_close_also_raises(self):
+        db_mock = MagicMock()
+        db_mock.close.side_effect = OSError("cannot close")
+        import ansible.plugins.loader as loader
+        with patch("terrible_provider.discovery._open_cache", return_value=db_mock), \
+             patch("terrible_provider.discovery._load_cached", side_effect=RuntimeError("load failed")), \
+             patch.object(loader.module_loader, "all", return_value=[]):
+            discover_task_resources()  # Must not raise despite close failing
+
+    def test_walk_valid_module_full_check_mode(self, tmp_path):
+        mod_dir = tmp_path / "ansible" / "modules"
+        mod_dir.mkdir(parents=True)
+        (mod_dir / "fakemod.py").write_text(_FAKE_MODULE_FULL)
+        db_mock = MagicMock()
+        import ansible.plugins.loader as loader
+        with patch("terrible_provider.discovery._open_cache", return_value=db_mock), \
+             patch("terrible_provider.discovery._load_cached", return_value=None), \
+             patch("terrible_provider.discovery._save_cache") as mock_save, \
+             patch.object(loader.module_loader, "all", return_value=[str(mod_dir / "fakemod.py")]):
+            resources, datasources = discover_task_resources()
+        assert len(resources) == 1
+        assert resources[0].get_name() == "fakemod"
+        assert len(datasources) == 1
+        mock_save.assert_called_once()
+
+    def test_walk_module_no_check_mode(self, tmp_path):
+        mod_dir = tmp_path / "ansible" / "modules"
+        mod_dir.mkdir(parents=True)
+        (mod_dir / "nocheck.py").write_text(_FAKE_MODULE_NONE)
+        import ansible.plugins.loader as loader
+        with patch("terrible_provider.discovery._open_cache", side_effect=Exception("no cache")), \
+             patch.object(loader.module_loader, "all", return_value=[str(mod_dir / "nocheck.py")]):
+            resources, datasources = discover_task_resources()
+        assert len(resources) == 1
+        assert datasources == []
+
+    def test_walk_skips_underscore_files(self, tmp_path):
+        mod_dir = tmp_path / "ansible" / "modules"
+        mod_dir.mkdir(parents=True)
+        (mod_dir / "_private.py").write_text(_FAKE_MODULE_FULL)
+        import ansible.plugins.loader as loader
+        with patch("terrible_provider.discovery._open_cache", side_effect=Exception("no cache")), \
+             patch.object(loader.module_loader, "all", return_value=[str(mod_dir / "_private.py")]):
+            resources, _ = discover_task_resources()
+        assert resources == []
+
+    def test_walk_skips_non_py_and_empty_paths(self, tmp_path):
+        import ansible.plugins.loader as loader
+        with patch("terrible_provider.discovery._open_cache", side_effect=Exception("no cache")), \
+             patch.object(loader.module_loader, "all", return_value=["", None, "/some/file.pyc"]):
+            resources, _ = discover_task_resources()
+        assert resources == []
+
+    def test_walk_skips_unrecognized_paths(self, tmp_path):
+        unknown = tmp_path / "random" / "place" / "mymod.py"
+        unknown.parent.mkdir(parents=True)
+        unknown.write_text(_FAKE_MODULE_FULL)
+        import ansible.plugins.loader as loader
+        with patch("terrible_provider.discovery._open_cache", side_effect=Exception("no cache")), \
+             patch.object(loader.module_loader, "all", return_value=[str(unknown)]):
+            resources, _ = discover_task_resources()
+        assert resources == []
+
+    def test_walk_skips_oserror_on_open(self, tmp_path):
+        # File path matches fqcn regex but doesn't exist → OSError on open → skip
+        mod_dir = tmp_path / "ansible" / "modules"
+        mod_dir.mkdir(parents=True)
+        nonexistent = str(mod_dir / "ghost.py")
+        import ansible.plugins.loader as loader
+        with patch("terrible_provider.discovery._open_cache", side_effect=Exception("no cache")), \
+             patch.object(loader.module_loader, "all", return_value=[nonexistent]):
+            resources, _ = discover_task_resources()
+        assert resources == []
+
+    def test_walk_skips_modules_without_docs(self, tmp_path):
+        mod_dir = tmp_path / "ansible" / "modules"
+        mod_dir.mkdir(parents=True)
+        (mod_dir / "nodoc.py").write_text("# No documentation block here\n")
+        import ansible.plugins.loader as loader
+        with patch("terrible_provider.discovery._open_cache", side_effect=Exception("no cache")), \
+             patch.object(loader.module_loader, "all", return_value=[str(mod_dir / "nodoc.py")]):
+            resources, _ = discover_task_resources()
+        assert resources == []
+
+    def test_walk_handles_make_task_class_exception(self, tmp_path):
+        mod_dir = tmp_path / "ansible" / "modules"
+        mod_dir.mkdir(parents=True)
+        (mod_dir / "badmod.py").write_text(_FAKE_MODULE_FULL)
+        import ansible.plugins.loader as loader
+        with patch("terrible_provider.discovery._open_cache", side_effect=Exception("no cache")), \
+             patch.object(loader.module_loader, "all", return_value=[str(mod_dir / "badmod.py")]), \
+             patch("terrible_provider.discovery.make_task_class", side_effect=ValueError("bad class")):
+            resources, _ = discover_task_resources()
+        assert resources == []
+
+    def test_save_cache_exception_handled(self, tmp_path):
+        mod_dir = tmp_path / "ansible" / "modules"
+        mod_dir.mkdir(parents=True)
+        (mod_dir / "goodmod.py").write_text(_FAKE_MODULE_FULL)
+        db_mock = MagicMock()
+        import ansible.plugins.loader as loader
+        with patch("terrible_provider.discovery._open_cache", return_value=db_mock), \
+             patch("terrible_provider.discovery._load_cached", return_value=None), \
+             patch("terrible_provider.discovery._save_cache", side_effect=Exception("disk full")), \
+             patch.object(loader.module_loader, "all", return_value=[str(mod_dir / "goodmod.py")]):
+            discover_task_resources()  # Must not raise
+
+    def test_finally_db_close_exception_handled(self):
+        db_mock = MagicMock()
+        db_mock.close.side_effect = OSError("final close failed")
+        import ansible.plugins.loader as loader
+        with patch("terrible_provider.discovery._open_cache", return_value=db_mock), \
+             patch("terrible_provider.discovery._load_cached", return_value=None), \
+             patch("terrible_provider.discovery._save_cache"), \
+             patch.object(loader.module_loader, "all", return_value=[]):
+            discover_task_resources()  # Must not raise

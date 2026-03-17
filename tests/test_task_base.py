@@ -1,6 +1,8 @@
 """Unit tests for TerribleTaskBase resource methods."""
 
 import json
+import sys
+import threading
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,7 +15,11 @@ from tf.types import Bool, NormalizedJson, String
 from tf.types import Unknown
 from tf.utils import Diagnostics
 
-from terrible_provider.task_base import TerribleTaskBase, _build_args_str
+from terrible_provider.task_base import (
+    TerribleTaskBase, _build_args_str,
+    _ensure_collection_finder, _ensure_ansible_initialized,
+    _make_callback, _run_module,
+)
 from terrible_provider.discovery import make_task_class, _coerce_number
 
 
@@ -298,3 +304,188 @@ class TestExecuteErrors:
         with patch("terrible_provider.task_base._run_module", return_value={"unreachable": True, "msg": "no route"}):
             inst._execute(diags, {"host_id": "h1"})
         assert diags.has_errors()
+
+
+# ---------------------------------------------------------------------------
+# Helper — fake TaskQueueManager that injects a result into the callback
+# ---------------------------------------------------------------------------
+
+def _make_mock_tqm(result):
+    class _MockTQM:
+        def __init__(self, **kwargs):
+            self._callback_plugins = []
+        def load_callbacks(self):
+            pass
+        def run(self, play):
+            for cb in self._callback_plugins:
+                if hasattr(cb, 'result') and cb.result is None:
+                    cb.result = result
+        def cleanup(self):
+            pass
+    return _MockTQM
+
+
+# ---------------------------------------------------------------------------
+# _ensure_collection_finder
+# ---------------------------------------------------------------------------
+
+class TestEnsureCollectionFinder:
+    def test_already_installed_no_op(self):
+        mock_cfg = MagicMock()
+        mock_cfg.collection_finder = MagicMock()  # Not None — already installed
+        mock_module = MagicMock(
+            AnsibleCollectionConfig=mock_cfg,
+            _AnsibleCollectionFinder=MagicMock(),
+        )
+        with patch.dict(sys.modules, {'ansible.utils.collection_loader._collection_finder': mock_module}):
+            _ensure_collection_finder()
+        mock_module._AnsibleCollectionFinder.assert_not_called()
+
+    def test_not_installed_calls_install(self):
+        mock_finder = MagicMock()
+        mock_cfg = MagicMock()
+        mock_cfg.collection_finder = None
+        mock_module = MagicMock(
+            _AnsibleCollectionFinder=MagicMock(return_value=mock_finder),
+            AnsibleCollectionConfig=mock_cfg,
+        )
+        with patch.dict(sys.modules, {'ansible.utils.collection_loader._collection_finder': mock_module}):
+            _ensure_collection_finder()
+        mock_module._AnsibleCollectionFinder.assert_called_once_with(paths=[])
+        mock_finder._install.assert_called_once()
+
+    def test_import_error_is_ignored(self):
+        with patch.dict(sys.modules, {'ansible.utils.collection_loader._collection_finder': None}):
+            _ensure_collection_finder()  # Must not raise
+
+
+# ---------------------------------------------------------------------------
+# _ensure_ansible_initialized
+# ---------------------------------------------------------------------------
+
+class TestEnsureAnsibleInitialized:
+    def test_sets_cliargs_on_first_call(self):
+        import terrible_provider.task_base as tb
+        original = tb._ansible_initialized
+        tb._ansible_initialized = False
+        try:
+            _ensure_ansible_initialized()
+            assert tb._ansible_initialized is True
+        finally:
+            tb._ansible_initialized = original
+
+    def test_noop_when_already_initialized(self):
+        import terrible_provider.task_base as tb
+        tb._ansible_initialized = True
+        _ensure_ansible_initialized()
+        assert tb._ansible_initialized is True
+
+
+# ---------------------------------------------------------------------------
+# _make_callback
+# ---------------------------------------------------------------------------
+
+class TestMakeCallback:
+    def test_returns_callback_with_none_result(self):
+        cb = _make_callback()
+        assert cb.result is None
+
+    def test_v2_runner_on_ok_sets_result(self):
+        cb = _make_callback()
+        r = MagicMock()
+        r.result = {"changed": False, "ping": "pong"}
+        cb.v2_runner_on_ok(r)
+        assert cb.result == {"changed": False, "ping": "pong"}
+
+    def test_v2_runner_on_failed_sets_result(self):
+        cb = _make_callback()
+        r = MagicMock()
+        r.result = {"failed": True, "msg": "boom"}
+        cb.v2_runner_on_failed(r)
+        assert cb.result == {"failed": True, "msg": "boom"}
+
+    def test_v2_runner_on_unreachable_sets_unreachable(self):
+        cb = _make_callback()
+        r = MagicMock()
+        r.result = {"msg": "no route"}
+        cb.v2_runner_on_unreachable(r)
+        assert cb.result.get("unreachable") is True
+
+
+# ---------------------------------------------------------------------------
+# _run_module
+# ---------------------------------------------------------------------------
+
+class TestRunModule:
+    _HOST = {"host": "127.0.0.1", "connection": "local"}
+
+    def test_success_returns_callback_result(self):
+        MockTQM = _make_mock_tqm({"changed": False, "ping": "pong"})
+        with patch("ansible.executor.task_queue_manager.TaskQueueManager", MockTQM):
+            result = _run_module(self._HOST, "ansible.builtin.ping", None)
+        assert result == {"changed": False, "ping": "pong"}
+
+    def test_with_args_string(self):
+        MockTQM = _make_mock_tqm({"changed": True, "rc": 0})
+        with patch("ansible.executor.task_queue_manager.TaskQueueManager", MockTQM):
+            result = _run_module(self._HOST, "ansible.builtin.command", '{"_raw_params": "true"}')
+        assert result["rc"] == 0
+
+    def test_check_only_true(self):
+        MockTQM = _make_mock_tqm({"changed": False})
+        with patch("ansible.executor.task_queue_manager.TaskQueueManager", MockTQM):
+            result = _run_module(self._HOST, "ansible.builtin.ping", None, check_only=True)
+        assert result == {"changed": False}
+
+    def test_ssh_host_with_extra_options(self):
+        host = {
+            "host": "10.0.0.1",
+            "connection": "ssh",
+            "user": "testuser",
+            "private_key_path": "/tmp/id_rsa",
+            "port": 2222,
+        }
+        MockTQM = _make_mock_tqm({"changed": False})
+        with patch("ansible.executor.task_queue_manager.TaskQueueManager", MockTQM):
+            result = _run_module(host, "ansible.builtin.ping", None)
+        assert "failed" not in result
+
+    def test_tqm_run_raises_returns_failed(self):
+        class _ErrTQM:
+            def __init__(self, **kwargs):
+                self._callback_plugins = []
+            def load_callbacks(self):
+                pass
+            def run(self, play):
+                raise RuntimeError("task exploded")
+            def cleanup(self):
+                pass
+        with patch("ansible.executor.task_queue_manager.TaskQueueManager", _ErrTQM):
+            result = _run_module(self._HOST, "ansible.builtin.ping", None)
+        assert result["failed"] is True
+        assert "task exploded" in result["msg"]
+
+    def test_no_result_returns_failed(self):
+        class _SilentTQM:
+            def __init__(self, **kwargs):
+                self._callback_plugins = []
+            def load_callbacks(self):
+                pass
+            def run(self, play):
+                pass
+            def cleanup(self):
+                pass
+        with patch("ansible.executor.task_queue_manager.TaskQueueManager", _SilentTQM):
+            result = _run_module(self._HOST, "ansible.builtin.ping", None)
+        assert result["failed"] is True
+
+    def test_from_non_main_thread(self):
+        MockTQM = _make_mock_tqm({"changed": False})
+        results = []
+        def _run():
+            with patch("ansible.executor.task_queue_manager.TaskQueueManager", MockTQM):
+                results.append(_run_module(self._HOST, "ansible.builtin.ping", None))
+        t = threading.Thread(target=_run)
+        t.start()
+        t.join()
+        assert results == [{"changed": False}]

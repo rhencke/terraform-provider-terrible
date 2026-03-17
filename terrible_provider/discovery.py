@@ -394,7 +394,7 @@ def discover_task_resources() -> tuple[list[type], list[type]]:
     seen_fqcns: set[str] = set()
 
     try:
-        for path in module_loader.all(path_only=True):  # pragma: no cover
+        for path in module_loader.all(path_only=True):
             if not path or not path.endswith(".py") or os.path.basename(path).startswith("_"):
                 continue
 
