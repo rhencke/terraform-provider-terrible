@@ -71,6 +71,7 @@ class TestBuildArgsStr:
         s = _build_args_str({
             "timeout": 300, "ignore_errors": True,
             "changed_when": "false", "failed_when": "rc != 0",
+            "environment": {"FOO": "bar"}, "tags": ["deploy"], "skip_tags": ["slow"],
         })
         assert s is None
 
@@ -473,6 +474,12 @@ class TestMakeCallback:
         cb.v2_runner_on_unreachable(r)
         assert cb.result.get("unreachable") is True
 
+    def test_v2_runner_on_skipped_sets_skipped(self):
+        cb = _make_callback()
+        r = MagicMock()
+        cb.v2_runner_on_skipped(r)
+        assert cb.result == {"changed": False, "skipped": True}
+
 
 # ---------------------------------------------------------------------------
 # _run_module
@@ -706,6 +713,37 @@ class TestRunModule:
             _run_module(self._HOST, "ansible.builtin.ping", None, failed_when="rc != 0")
         assert "tasks" in captured_play
 
+    def test_environment_in_task(self):
+        captured_play = {}
+        class _CaptureTQM:
+            def __init__(self, **kw): self._callback_plugins = []
+            def load_callbacks(self): pass
+            def run(self, play):
+                captured_play['tasks'] = play.compile()
+                for cb in self._callback_plugins:
+                    if hasattr(cb, 'result') and cb.result is None:
+                        cb.result = {"changed": False}
+            def cleanup(self): pass
+        with patch("ansible.executor.task_queue_manager.TaskQueueManager", _CaptureTQM):
+            _run_module(self._HOST, "ansible.builtin.ping", None,
+                        environment={"ANSIBLE_TIMEOUT": "10"})
+        assert "tasks" in captured_play
+
+    def test_tags_in_task(self):
+        captured_play = {}
+        class _CaptureTQM:
+            def __init__(self, **kw): self._callback_plugins = []
+            def load_callbacks(self): pass
+            def run(self, play):
+                captured_play['tasks'] = play.compile()
+                for cb in self._callback_plugins:
+                    if hasattr(cb, 'result') and cb.result is None:
+                        cb.result = {"changed": False}
+            def cleanup(self): pass
+        with patch("ansible.executor.task_queue_manager.TaskQueueManager", _CaptureTQM):
+            _run_module(self._HOST, "ansible.builtin.ping", None, tags=["deploy"])
+        assert "tasks" in captured_play
+
 
 # ---------------------------------------------------------------------------
 # _execute — ignore_errors and new kwarg passthrough
@@ -748,3 +786,25 @@ class TestExecuteIgnoreErrors:
         assert calls[0]["timeout"] == 60
         assert calls[0]["changed_when"] == "false"
         assert calls[0]["failed_when"] == "rc != 0"
+
+    def test_environment_tags_skip_tags_forwarded(self):
+        klass = _make_class()
+        prov = _provider(state={"h1": _host()})
+        inst = klass(prov)
+        calls = []
+        def _mock_run(host, module, args, **kwargs):
+            calls.append(kwargs)
+            return {"changed": False}
+        with patch("terrible_provider.task_base._run_module", side_effect=_mock_run):
+            inst._execute(
+                Diagnostics(),
+                {
+                    "host_id": "h1",
+                    "environment": {"FOO": "bar"},
+                    "tags": ["deploy"],
+                    "skip_tags": ["slow"],
+                },
+            )
+        assert calls[0]["environment"] == {"FOO": "bar"}
+        assert calls[0]["tags"] == ["deploy"]
+        assert calls[0]["skip_tags"] == ["slow"]

@@ -86,6 +86,24 @@ _FRAMEWORK_ATTRS = [
         description="Jinja2 expression that overrides when the task is considered failed.",
         optional=True,
     ),
+    Attribute(
+        "environment",
+        NormalizedJson(),
+        description="Environment variables set for the task (dict of name→value).",
+        optional=True,
+    ),
+    Attribute(
+        "tags",
+        NormalizedJson(),
+        description="Run only tasks with these Ansible tags (list of strings).",
+        optional=True,
+    ),
+    Attribute(
+        "skip_tags",
+        NormalizedJson(),
+        description="Skip tasks with these Ansible tags (list of strings).",
+        optional=True,
+    ),
 ]
 
 _FRAMEWORK_NAMES = {a.name for a in _FRAMEWORK_ATTRS}
