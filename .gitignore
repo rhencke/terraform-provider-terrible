@@ -217,3 +217,13 @@ tests/integration/terraform/terraform.tfstate.backup
 **/terraform.tfstate.backup
 **/.terraform.lock.hcl
 **/terrible_state.json
+
+# Built provider binary
+terraform-provider-terrible
+
+# VS Code workspace settings
+.vscode/
+
+# Claude Code project-local settings
+.claude/settings.json
+.claude/settings.local.json
