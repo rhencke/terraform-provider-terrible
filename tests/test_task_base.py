@@ -18,7 +18,7 @@ from tf.utils import Diagnostics
 from terrible_provider.task_base import (
     TerribleTaskBase, _build_args_str,
     _ensure_collection_finder, _ensure_ansible_initialized,
-    _make_callback, _run_module,
+    _make_callback, _run_module, _setup_host_inventory,
 )
 from terrible_provider.discovery import make_task_class, _coerce_number
 
@@ -1067,3 +1067,55 @@ class TestVaultSecretsInRunModule:
         with patch("terrible_provider.task_base._run_module", return_value={"changed": False}) as mock_run:
             inst._execute_check(Diagnostics(), {"host_id": "h1"})
         assert mock_run.call_args.kwargs.get("vault_secrets") == prov._vault_secrets
+
+
+# ---------------------------------------------------------------------------
+# WinRM host inventory setup
+# ---------------------------------------------------------------------------
+
+class TestSetupHostInventoryWinRM:
+    def _make_host(self):
+        from ansible.parsing.dataloader import DataLoader
+        from ansible.inventory.manager import InventoryManager
+        loader = DataLoader()
+        inv = InventoryManager(loader=loader, sources="target,")
+        return inv.get_host("target")
+
+    def test_winrm_sets_default_port(self):
+        hobj = self._make_host()
+        _setup_host_inventory(hobj, {"host": "win.example.com", "connection": "winrm"})
+        assert hobj.vars["ansible_port"] == 5986
+        assert hobj.vars["ansible_connection"] == "winrm"
+
+    def test_winrm_custom_port(self):
+        hobj = self._make_host()
+        _setup_host_inventory(hobj, {"host": "win.example.com", "connection": "winrm", "winrm_port": 5985})
+        assert hobj.vars["ansible_port"] == 5985
+
+    def test_winrm_scheme(self):
+        hobj = self._make_host()
+        _setup_host_inventory(hobj, {"host": "win.example.com", "connection": "winrm", "winrm_scheme": "http"})
+        assert hobj.vars["ansible_winrm_scheme"] == "http"
+
+    def test_winrm_transport(self):
+        hobj = self._make_host()
+        _setup_host_inventory(hobj, {"host": "win.example.com", "connection": "winrm", "winrm_transport": "kerberos"})
+        assert hobj.vars["ansible_winrm_transport"] == "kerberos"
+
+    def test_winrm_cert_validation(self):
+        hobj = self._make_host()
+        _setup_host_inventory(hobj, {
+            "host": "win.example.com", "connection": "winrm",
+            "winrm_server_cert_validation": "ignore",
+        })
+        assert hobj.vars["ansible_winrm_server_cert_validation"] == "ignore"
+
+    def test_winrm_does_not_set_ssh_extra_args(self):
+        hobj = self._make_host()
+        _setup_host_inventory(hobj, {"host": "win.example.com", "connection": "winrm"})
+        assert "ansible_ssh_extra_args" not in hobj.vars
+
+    def test_ssh_connection_still_sets_ssh_extra_args(self):
+        hobj = self._make_host()
+        _setup_host_inventory(hobj, {"host": "linux.example.com", "connection": "ssh"})
+        assert "ansible_ssh_extra_args" in hobj.vars

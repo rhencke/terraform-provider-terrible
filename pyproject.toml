@@ -9,6 +9,9 @@ dependencies = [
     "tf>=1.1.0",
 ]
 
+[project.optional-dependencies]
+winrm = ["pywinrm>=0.4.0"]
+
 [project.scripts]
 terraform-provider-terrible = "terrible_provider.cli:main"
 install-provider = "terrible_provider.install:main"
