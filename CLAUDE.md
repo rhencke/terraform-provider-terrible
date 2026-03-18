@@ -22,20 +22,23 @@ The current implementation (`TerribleItem`) is a placeholder scaffold.
 ## Common Commands
 
 ```bash
-# Install package in editable mode
-make editable-install        # or: pip install -e .
+# Run unit tests (100% coverage required)
+make test
+
+# Run integration tests against localhost
+make integration-test
+
+# Run all tests (unit + integration — same as pre-commit hook)
+make test-all
+
+# Install git pre-commit hook
+make install-hooks
 
 # Install provider into Terraform plugin directory
 make install-provider
 
 # Run provider in dev mode (prints TF_REATTACH_PROVIDERS)
 make run-provider
-
-# Run tests
-pytest -q
-
-# Run standalone example (no Terraform/Ansible needed)
-python3 examples/run_example.py
 
 # Terraform example workflow
 make example-init

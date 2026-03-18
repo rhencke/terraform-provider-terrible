@@ -1,52 +1,53 @@
-UV=uv run
-
-.PHONY: help editable-install install-provider run-provider example-init example-apply example-fresh integration-test integration-test-verbose build-binary release
+.PHONY: help test integration-test test-all install-hooks install-provider run-provider example-init example-apply example-fresh build-binary release
 
 help:
 	@echo "Makefile targets:"
-	@echo "  editable-install       - install package in editable mode"
+	@echo "  test                   - run unit tests with 100% coverage"
+	@echo "  integration-test       - run integration tests against localhost"
+	@echo "  test-all               - run unit + integration tests (same as pre-commit hook)"
+	@echo "  install-hooks          - install git pre-commit hook"
 	@echo "  install-provider       - install provider into local terraform plugin registry"
 	@echo "  run-provider           - run provider in dev mode (prints TF_REATTACH_PROVIDERS)"
-	@echo "  example-init           - run 'terraform init' in the example project"
-	@echo "  example-apply          - run 'terraform apply' in the example project (interactive)"
+	@echo "  example-init           - run 'tofu init' in the example project"
+	@echo "  example-apply          - run 'tofu apply' in the example project (interactive)"
 	@echo "  example-fresh          - reinstall provider, wipe state, and auto-apply the example"
-	@echo "  integration-test       - build binary and run integration tests against localhost"
-	@echo "  integration-test-verbose - same, with verbose output"
 	@echo "  build-binary           - build a standalone pex binary (terraform-provider-terrible)"
 	@echo "  release VERSION=x.y.z  - run tests, tag, push, and create GitHub release (notes from stdin)"
 
-editable-install:
-	$(UV) pip install -e .
-
-install-provider:
-	$(UV) ./bin/install-provider
-
-run-provider:
-	$(UV) ./bin/terraform-provider-terrible --dev
-
-example-init:
-	cd examples/terraform_provider && terraform init
-
-example-apply:
-	cd examples/terraform_provider && terraform apply
-
-example-fresh: install-provider
-	rm -f examples/terraform_provider/terraform.tfstate examples/terraform_provider/terraform.tfstate.backup terrible_state.json
-	cd examples/terraform_provider && terraform apply -auto-approve
+test:
+	uv run pytest tests/ --ignore=tests/integration -q
 
 integration-test:
-	TERRIBLE_INTEGRATION=1 $(UV) pytest tests/integration/ -v --timeout=120
+	TERRIBLE_INTEGRATION=1 uv run pytest tests/integration/ -q --no-cov --timeout=120
 
-integration-test-verbose:
-	TERRIBLE_INTEGRATION=1 $(UV) pytest tests/integration/ -v -s --timeout=120
+test-all: test integration-test
+
+install-hooks:
+	scripts/install-hooks.sh
+
+install-provider:
+	uv run install-provider
+
+run-provider:
+	uv run terraform-provider-terrible --dev
+
+example-init:
+	cd examples/terraform_provider && tofu init
+
+example-apply:
+	cd examples/terraform_provider && tofu apply
+
+example-fresh: install-provider
+	rm -f examples/terraform_provider/terraform.tfstate examples/terraform_provider/terraform.tfstate.backup examples/terraform_provider/terrible_state.json
+	cd examples/terraform_provider && tofu apply -auto-approve
+
+build-binary:
+	uv export --format requirements-txt --no-dev --no-hashes | grep -v '^-e' > /tmp/terrible-requirements.txt
+	uv run pex -r /tmp/terrible-requirements.txt . \
+	  -o terraform-provider-terrible \
+	  -m terrible_provider.cli:main
+	@echo "Binary built: ./terraform-provider-terrible"
 
 release:
 	@test -n "$(VERSION)" || (echo "Usage: make release VERSION=x.y.z"; exit 1)
 	scripts/release.sh "$(VERSION)"
-
-build-binary:
-	uv export --format requirements-txt --no-dev --no-hashes | grep -v '^-e' > /tmp/terrible-requirements.txt
-	$(UV) pex -r /tmp/terrible-requirements.txt . \
-	  -o terraform-provider-terrible \
-	  -m terrible_provider.cli:main
-	@echo "Binary built: ./terraform-provider-terrible"
