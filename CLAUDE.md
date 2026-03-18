@@ -80,25 +80,81 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on push to `main` and PRs:
 
 ## Release Process
 
-Always use `scripts/release.sh` (or `make release VERSION=x.y.z`) when cutting a release. Never tag or create a GitHub release manually. The script enforces a clean working tree, runs the test suite, creates the annotated tag, pushes it, and creates the GitHub release in one go.
+### Pre-release checklist
+
+Before cutting any release:
+
+1. All planned milestone issues are closed.
+2. `uv run pytest -q` passes with 100% coverage locally.
+3. CI is green on `main` (check with `gh run list --limit 3`).
+4. Working tree is clean (`git status` shows nothing).
+5. `pyproject.toml` version matches the release version.
+
+### Cutting a release (pre-0.5.0 — no registry publishing yet)
+
+Use `scripts/release.sh` or the `make release` target. Never tag or create
+GitHub releases manually — the script enforces the checklist, runs tests,
+creates the annotated tag, pushes it, and creates the GitHub release.
 
 ```bash
-# Pipe release notes into the script (or make target):
 scripts/release.sh 0.4.0 <<'EOF'
-New features in this release
+Short title line (becomes the release title)
 
-## Features
-- foo
-- bar
+## New features
+- bullet points here
+
+## Bug fixes / internals
+- etc.
 EOF
 
-# Equivalent via make:
-make release VERSION=0.4.0   # reads notes interactively from stdin
+# Equivalent:
+make release VERSION=0.4.0   # reads notes from stdin
 ```
 
-Release notes must be written for every release — never leave them empty.
+Release notes must be non-empty and follow the format above. The first
+non-empty line becomes the release title on GitHub.
+
+After pushing, verify CI passes:
+
+```bash
+gh run list --limit 3
+gh run watch <run-id> --exit-status
+```
+
+### Cutting a release (0.5.0+ — Terraform Registry publishing)
+
+Once the Actions release workflow exists (#20), the process changes:
+
+1. Run pre-release checklist above.
+2. Push the tag — **do not** create the GitHub release manually:
+   ```bash
+   git tag -a v0.5.0 -m "v0.5.0 — <title>"
+   git push origin v0.5.0
+   ```
+3. The `release.yml` workflow triggers automatically. It builds PyInstaller
+   binaries on all 5 platform runners, zips them, generates `SHA256SUMS`,
+   signs with GPG, and uploads everything to a draft GitHub release.
+4. Review the draft release, add release notes, and publish.
+5. registry.terraform.io picks up the new version automatically within
+   ~10 minutes.
+
+Update `scripts/release.sh` in issue #21 to automate steps 2–4.
+
+### Milestones and issues
+
+Every release has a corresponding GitHub milestone (`v0.x.0`). Close issues
+as they are implemented. Before releasing, confirm the milestone shows 0 open
+issues.
+
+To check:
+```bash
+gh api repos/rhencke/terrible/milestones --jq '.[] | {title, open_issues, closed_issues}'
+```
 
 ## Claude Instructions
 
 - Do not add `Co-Authored-By: Claude` or any Claude/Anthropic attribution to commit messages.
 - Always use `scripts/release.sh` when tagging a release — never tag or create GitHub releases manually.
+- Always check CI after every push (`gh run list --limit 3`) and report the result.
+- Always close GitHub issues when implementing their features.
+- Always tag releases with release notes — never leave notes empty.
