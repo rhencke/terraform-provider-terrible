@@ -72,6 +72,7 @@ class TestBuildArgsStr:
             "timeout": 300, "ignore_errors": True,
             "changed_when": "false", "failed_when": "rc != 0",
             "environment": {"FOO": "bar"}, "tags": ["deploy"], "skip_tags": ["slow"],
+            "async_seconds": 600, "poll_interval": 10,
         })
         assert s is None
 
@@ -808,3 +809,90 @@ class TestExecuteIgnoreErrors:
         assert calls[0]["environment"] == {"FOO": "bar"}
         assert calls[0]["tags"] == ["deploy"]
         assert calls[0]["skip_tags"] == ["slow"]
+
+    def test_async_seconds_forwarded(self):
+        klass = _make_class()
+        prov = _provider(state={"h1": _host()})
+        inst = klass(prov)
+        calls = []
+        def _mock_run(host, module, args, **kwargs):
+            calls.append(kwargs)
+            return {"changed": False}
+        with patch("terrible_provider.task_base._run_module", side_effect=_mock_run):
+            inst._execute(
+                Diagnostics(),
+                {"host_id": "h1", "async_seconds": 600, "poll_interval": 10},
+            )
+        assert calls[0]["async_seconds"] == 600
+        assert calls[0]["poll_interval"] == 10
+
+
+# ---------------------------------------------------------------------------
+# Async task execution (async / poll)
+# ---------------------------------------------------------------------------
+
+class TestAsyncTaskExecution:
+    _HOST = {"host": "127.0.0.1", "port": 22, "connection": "local"}
+
+    @staticmethod
+    def _find_task(compiled_blocks):
+        """Find the actual (non-meta) task in a compiled play."""
+        for block in compiled_blocks:
+            for t in block.block:
+                if t.action != 'meta':
+                    return t
+        return None
+
+    def test_async_poll_in_task_dict(self):
+        captured_play = {}
+        class _CaptureTQM:
+            def __init__(self, **kw): self._callback_plugins = []
+            def load_callbacks(self): pass
+            def run(self, play):
+                captured_play['tasks'] = play.compile()
+                for cb in self._callback_plugins:
+                    if hasattr(cb, 'result') and cb.result is None:
+                        cb.result = {"changed": False}
+            def cleanup(self): pass
+        with patch("ansible.executor.task_queue_manager.TaskQueueManager", _CaptureTQM):
+            _run_module(self._HOST, "ansible.builtin.command", '{"cmd": "sleep 1"}',
+                        async_seconds=600, poll_interval=10)
+        task = self._find_task(captured_play["tasks"])
+        assert task is not None
+        assert task.async_val == 600
+        assert task.poll == 10
+
+    def test_no_async_when_zero(self):
+        captured_play = {}
+        class _CaptureTQM:
+            def __init__(self, **kw): self._callback_plugins = []
+            def load_callbacks(self): pass
+            def run(self, play):
+                captured_play['tasks'] = play.compile()
+                for cb in self._callback_plugins:
+                    if hasattr(cb, 'result') and cb.result is None:
+                        cb.result = {"changed": False}
+            def cleanup(self): pass
+        with patch("ansible.executor.task_queue_manager.TaskQueueManager", _CaptureTQM):
+            _run_module(self._HOST, "ansible.builtin.ping", None,
+                        async_seconds=0)
+        task = self._find_task(captured_play["tasks"])
+        assert task is not None
+        assert task.async_val == 0
+
+    def test_no_async_when_none(self):
+        captured_play = {}
+        class _CaptureTQM:
+            def __init__(self, **kw): self._callback_plugins = []
+            def load_callbacks(self): pass
+            def run(self, play):
+                captured_play['tasks'] = play.compile()
+                for cb in self._callback_plugins:
+                    if hasattr(cb, 'result') and cb.result is None:
+                        cb.result = {"changed": False}
+            def cleanup(self): pass
+        with patch("ansible.executor.task_queue_manager.TaskQueueManager", _CaptureTQM):
+            _run_module(self._HOST, "ansible.builtin.ping", None)
+        task = self._find_task(captured_play["tasks"])
+        assert task is not None
+        assert task.async_val == 0

@@ -131,6 +131,8 @@ def _run_module(
     environment: Optional[dict] = None,
     tags: Optional[list] = None,
     skip_tags: Optional[list] = None,
+    async_seconds: Optional[int] = None,
+    poll_interval: Optional[int] = None,
 ) -> dict:
     """Run an Ansible module in-process via TaskQueueManager."""
     _ensure_ansible_initialized()
@@ -180,6 +182,9 @@ def _run_module(
             task_dict['environment'] = environment
         if tags:
             task_dict['tags'] = tags
+        if async_seconds and int(async_seconds) > 0:
+            task_dict['async'] = int(async_seconds)
+            task_dict['poll'] = int(poll_interval) if poll_interval else 15
         play = Play().load(dict(
             name='terrible_task', hosts='target', gather_facts='no',
             check_mode=check_only, diff=check_only,
@@ -217,6 +222,7 @@ _SKIP_ATTRS = frozenset({
     "id", "host_id", "result", "changed", "triggers",
     "timeout", "ignore_errors", "changed_when", "failed_when",
     "environment", "tags", "skip_tags",
+    "async_seconds", "poll_interval",
 })
 
 
@@ -293,6 +299,8 @@ class TerribleTaskBase(Resource):
             environment=planned.get("environment"),
             tags=planned.get("tags"),
             skip_tags=planned.get("skip_tags"),
+            async_seconds=planned.get("async_seconds"),
+            poll_interval=planned.get("poll_interval"),
         )
         changed = bool(result.get("changed", False))
         if result.get("failed") or result.get("unreachable"):

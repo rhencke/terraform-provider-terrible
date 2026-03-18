@@ -79,9 +79,12 @@ def test_case(case_dir, tmp_path, provider_install):
 
     print(f"\n[{name}]", flush=True)
 
-    # Copy case to isolated workspace so each test has independent TF state
+    # Copy case to isolated workspace so each test has independent TF state.
+    # Ignore Terraform artifacts that may exist from manual runs.
     ws = tmp_path / name
-    shutil.copytree(str(case_dir), str(ws))
+    shutil.copytree(str(case_dir), str(ws), ignore=shutil.ignore_patterns(
+        ".terraform", ".terraform.lock.hcl", "terraform.tfstate*", "terrible_state.json",
+    ))
 
     # --- Arrange ---
     print(f"[{name}] cleanup (pre)", flush=True)

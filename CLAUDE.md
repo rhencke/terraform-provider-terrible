@@ -171,6 +171,19 @@ To check:
 gh api repos/rhencke/terrible/milestones --jq '.[] | {title, open_issues, closed_issues}'
 ```
 
+## Pre-commit Hook
+
+A pre-commit hook enforces 100% unit test coverage and passing integration
+tests before every commit. Install it if absent:
+
+```bash
+scripts/install-hooks.sh
+```
+
+The hook runs:
+1. `uv run pytest tests/ --ignore=tests/integration -q` (unit tests, 100% coverage)
+2. `TERRIBLE_INTEGRATION=1 uv run pytest tests/integration/ -q --no-cov` (integration tests)
+
 ## Claude Instructions
 
 - Do not add `Co-Authored-By: Claude` or any Claude/Anthropic attribution to commit messages.
@@ -178,3 +191,4 @@ gh api repos/rhencke/terrible/milestones --jq '.[] | {title, open_issues, closed
 - Always check CI after every push (`gh run list --limit 3`) and report the result.
 - Always close GitHub issues when implementing their features.
 - Always tag releases with release notes — never leave notes empty.
+- Before the first commit in a session, check if `.git/hooks/pre-commit` exists. If not, run `scripts/install-hooks.sh`.

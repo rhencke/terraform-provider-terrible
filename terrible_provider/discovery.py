@@ -104,6 +104,18 @@ _FRAMEWORK_ATTRS = [
         description="Skip tasks with these Ansible tags (list of strings).",
         optional=True,
     ),
+    Attribute(
+        "async_seconds",
+        Number(),
+        description="Run the task asynchronously, timing out after this many seconds. 0 = synchronous (default).",
+        optional=True,
+    ),
+    Attribute(
+        "poll_interval",
+        Number(),
+        description="Polling interval in seconds when async_seconds > 0. Defaults to 15.",
+        optional=True,
+    ),
 ]
 
 _FRAMEWORK_NAMES = {a.name for a in _FRAMEWORK_ATTRS}
