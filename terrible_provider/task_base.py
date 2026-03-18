@@ -72,7 +72,12 @@ def _setup_host_inventory(hobj, host_state: dict) -> None:
         hobj.vars['ansible_user'] = user
     if key := host_state.get("private_key_path"):
         hobj.vars['ansible_ssh_private_key_file'] = key
-    if connection != 'local':
+    if connection == 'winrm':
+        hobj.vars['ansible_port'] = int(host_state.get("winrm_port") or 5986)
+        hobj.vars['ansible_winrm_scheme'] = host_state.get("winrm_scheme") or "https"
+        hobj.vars['ansible_winrm_transport'] = host_state.get("winrm_transport") or "ntlm"
+        hobj.vars['ansible_winrm_server_cert_validation'] = host_state.get("winrm_server_cert_validation") or "validate"
+    elif connection != 'local':
         hobj.vars['ansible_ssh_extra_args'] = (
             host_state.get("ssh_extra_args")
             or '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'

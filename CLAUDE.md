@@ -74,12 +74,29 @@ tests/
 - The only resource is `TerribleItem` with schema: `id` (computed), `name` (required), `value` (optional)
 - The `tf` package handles all gRPC communication with Terraform core
 
+## Development Workflow
+
+All changes go through pull requests. Direct pushes to `main` are blocked.
+
+1. **Branch** — create a feature branch from `main`
+2. **Develop** — commit with pre-commit hooks passing (unit + integration tests)
+3. **Push & PR** — push branch, open a PR against `main`
+4. **CI** — unit tests (100% coverage) and integration tests must pass
+5. **Address feedback** — resolve all review conversations
+6. **Merge** — auto-merge after checks pass and conversations are resolved
+
+Branch protection on `main` enforces:
+- PRs required (no direct push)
+- `test` status check must pass (unit + integration tests)
+- All conversations must be resolved
+- Stale reviews dismissed on new pushes
+- Auto-merge enabled; branches deleted after merge
+
 ## CI
 
-GitHub Actions (`.github/workflows/ci.yml`) runs on push to `main` and PRs:
-1. Python 3.12 setup
-2. `pip install -e .`
-3. `pytest -q`
+GitHub Actions (`.github/workflows/ci.yml`) runs on push to `main` and PRs.
+It calls `make test-all` — the same single source of truth used by the
+pre-commit hook. This ensures CI and local checks can never drift apart.
 
 ## Release Process
 
@@ -190,6 +207,7 @@ The hook runs:
 ## Claude Instructions
 
 - Do not add `Co-Authored-By: Claude` or any Claude/Anthropic attribution to commit messages.
+- Always work on a feature branch, never commit directly to `main`. Push and open a PR.
 - Always use `scripts/release.sh` when tagging a release — never tag or create GitHub releases manually.
 - Always check CI after every push (`gh run list --limit 3`) and report the result.
 - Always close GitHub issues when implementing their features.

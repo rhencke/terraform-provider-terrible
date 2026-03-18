@@ -31,6 +31,7 @@ class TestTerribleHost:
             "id", "host", "port", "user", "private_key_path", "connection",
             "ssh_extra_args",
             "become", "become_user", "become_method", "become_password",
+            "winrm_port", "winrm_scheme", "winrm_transport", "winrm_server_cert_validation",
             "vars",
         }
 
@@ -147,3 +148,19 @@ class TestTerribleHost:
         prov = _provider()
         inst = TerribleHost(prov)
         assert inst.import_(_ctx(ImportContext), "gone") is None
+
+    def test_create_stores_winrm_fields(self):
+        prov = _provider()
+        inst = TerribleHost(prov)
+        state = inst.create(_ctx(CreateContext), {
+            "host": "10.0.0.1",
+            "connection": "winrm",
+            "winrm_port": 5985,
+            "winrm_scheme": "http",
+            "winrm_transport": "ntlm",
+            "winrm_server_cert_validation": "ignore",
+        })
+        assert state["winrm_port"] == 5985
+        assert state["winrm_scheme"] == "http"
+        assert state["winrm_transport"] == "ntlm"
+        assert state["winrm_server_cert_validation"] == "ignore"

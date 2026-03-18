@@ -64,6 +64,30 @@ class TerribleHost(Resource):
                     sensitive=True,
                 ),
                 Attribute(
+                    "winrm_port",
+                    Number(),
+                    description="WinRM port. Defaults to 5986 when connection is winrm. Requires: pip install terrible[winrm].",
+                    optional=True,
+                ),
+                Attribute(
+                    "winrm_scheme",
+                    String(),
+                    description="WinRM scheme (http or https). Defaults to https.",
+                    optional=True,
+                ),
+                Attribute(
+                    "winrm_transport",
+                    String(),
+                    description="WinRM transport (ntlm, kerberos, basic, credssp). Defaults to ntlm.",
+                    optional=True,
+                ),
+                Attribute(
+                    "winrm_server_cert_validation",
+                    String(),
+                    description="WinRM server certificate validation (validate or ignore). Defaults to validate.",
+                    optional=True,
+                ),
+                Attribute(
                     "vars",
                     NormalizedJson(),
                     description=(
