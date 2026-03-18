@@ -49,11 +49,40 @@ def _ensure_ansible_initialized():
             'connection': 'ssh', 'verbosity': 0,
             'private_key_file': None, 'remote_user': None,
             'start_at_task': None, 'task_timeout': 0,
+            'tags': ['all'], 'skip_tags': [],
         })
         _ansible_initialized = True
 
 
 _run_module_lock = threading.Lock()  # TQM is not thread-safe; serialise all calls
+
+
+# ---------------------------------------------------------------------------
+# Shared inventory setup
+# ---------------------------------------------------------------------------
+
+def _setup_host_inventory(hobj, host_state: dict) -> None:
+    """Populate Ansible host variables on *hobj* from a TerribleHost state dict."""
+    connection = host_state.get("connection")
+    hobj.vars['ansible_host'] = host_state["host"]
+    hobj.vars['ansible_port'] = int(host_state.get("port") or 22)
+    if connection:
+        hobj.vars['ansible_connection'] = connection
+    if user := host_state.get("user"):
+        hobj.vars['ansible_user'] = user
+    if key := host_state.get("private_key_path"):
+        hobj.vars['ansible_ssh_private_key_file'] = key
+    if connection != 'local':
+        hobj.vars['ansible_ssh_extra_args'] = (
+            host_state.get("ssh_extra_args")
+            or '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+        )
+    if host_state.get("become"):
+        hobj.vars['ansible_become']          = True
+        hobj.vars['ansible_become_user']     = host_state.get("become_user") or "root"
+        hobj.vars['ansible_become_method']   = host_state.get("become_method") or "sudo"
+        hobj.vars['ansible_become_password'] = host_state.get("become_password")
+    hobj.vars.update(host_state.get("vars") or {})
 
 
 # ---------------------------------------------------------------------------
@@ -67,7 +96,8 @@ def _make_callback():
     class _CB(CallbackBase):
         result = None
         _implemented_callback_methods = frozenset({
-            'v2_runner_on_ok', 'v2_runner_on_failed', 'v2_runner_on_unreachable',
+            'v2_runner_on_ok', 'v2_runner_on_failed',
+            'v2_runner_on_unreachable', 'v2_runner_on_skipped',
         })
 
         def v2_runner_on_ok(self, r):
@@ -78,6 +108,9 @@ def _make_callback():
 
         def v2_runner_on_unreachable(self, r):
             self.result = {'unreachable': True, **dict(r.result)}
+
+        def v2_runner_on_skipped(self, r):
+            self.result = {'changed': False, 'skipped': True}
 
     return _CB()
 
@@ -95,6 +128,9 @@ def _run_module(
     timeout: Optional[int] = None,
     changed_when: Optional[str] = None,
     failed_when: Optional[str] = None,
+    environment: Optional[dict] = None,
+    tags: Optional[list] = None,
+    skip_tags: Optional[list] = None,
 ) -> dict:
     """Run an Ansible module in-process via TaskQueueManager."""
     _ensure_ansible_initialized()
@@ -107,11 +143,6 @@ def _run_module(
     from ansible import context as _ansible_context
     from ansible.utils.context_objects import CLIArgs
 
-    host = host_state["host"]
-    port = int(host_state.get("port") or 22)
-    user = host_state.get("user")
-    key = host_state.get("private_key_path")
-    connection = host_state.get("connection")
     args_dict = json.loads(args) if args else {}
 
     with _run_module_lock:
@@ -123,33 +154,20 @@ def _run_module(
             _real_signal = _signal.signal
             _signal.signal = lambda *a, **kw: None  # type: ignore[method-assign]
 
-        # Override CLIARGS timeout for this call; restore in finally.
+        # Override CLIARGS for this call (timeout + tag filters); restore in finally.
         effective_timeout = int(timeout) if timeout else _MODULE_TIMEOUT
         orig_cliargs = _ansible_context.CLIARGS
-        _ansible_context.CLIARGS = CLIArgs({**dict(orig_cliargs), 'timeout': effective_timeout})
+        _ansible_context.CLIARGS = CLIArgs({
+            **dict(orig_cliargs),
+            'timeout': effective_timeout,
+            'tags': tags or ['all'],
+            'skip_tags': skip_tags or [],
+        })
 
         loader = DataLoader()
         inv    = InventoryManager(loader=loader, sources='target,')
         hobj   = inv.get_host('target')
-        hobj.vars['ansible_host'] = host
-        hobj.vars['ansible_port'] = port
-        if connection:
-            hobj.vars['ansible_connection'] = connection
-        if user:
-            hobj.vars['ansible_user'] = user
-        if key:
-            hobj.vars['ansible_ssh_private_key_file'] = key
-        if connection != 'local':
-            hobj.vars['ansible_ssh_extra_args'] = (
-                host_state.get("ssh_extra_args")
-                or '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
-            )
-        if host_state.get("become"):
-            hobj.vars['ansible_become']          = True
-            hobj.vars['ansible_become_user']     = host_state.get("become_user") or "root"
-            hobj.vars['ansible_become_method']   = host_state.get("become_method") or "sudo"
-            hobj.vars['ansible_become_password'] = host_state.get("become_password")
-        hobj.vars.update(host_state.get("vars") or {})
+        _setup_host_inventory(hobj, host_state)
 
         vm  = VariableManager(loader=loader, inventory=inv)
         cb  = _make_callback()
@@ -158,6 +176,10 @@ def _run_module(
             task_dict['changed_when'] = changed_when
         if failed_when is not None:
             task_dict['failed_when'] = failed_when
+        if environment:
+            task_dict['environment'] = environment
+        if tags:
+            task_dict['tags'] = tags
         play = Play().load(dict(
             name='terrible_task', hosts='target', gather_facts='no',
             check_mode=check_only, diff=check_only,
@@ -194,6 +216,7 @@ def _run_module(
 _SKIP_ATTRS = frozenset({
     "id", "host_id", "result", "changed", "triggers",
     "timeout", "ignore_errors", "changed_when", "failed_when",
+    "environment", "tags", "skip_tags",
 })
 
 
@@ -267,6 +290,9 @@ class TerribleTaskBase(Resource):
             timeout=planned.get("timeout"),
             changed_when=planned.get("changed_when"),
             failed_when=planned.get("failed_when"),
+            environment=planned.get("environment"),
+            tags=planned.get("tags"),
+            skip_tags=planned.get("skip_tags"),
         )
         changed = bool(result.get("changed", False))
         if result.get("failed") or result.get("unreachable"):
