@@ -1110,6 +1110,21 @@ class TestSetupHostInventoryWinRM:
         })
         assert hobj.vars["ansible_winrm_server_cert_validation"] == "ignore"
 
+    def test_winrm_defaults_scheme_to_https(self):
+        hobj = self._make_host()
+        _setup_host_inventory(hobj, {"host": "win.example.com", "connection": "winrm"})
+        assert hobj.vars["ansible_winrm_scheme"] == "https"
+
+    def test_winrm_defaults_transport_to_ntlm(self):
+        hobj = self._make_host()
+        _setup_host_inventory(hobj, {"host": "win.example.com", "connection": "winrm"})
+        assert hobj.vars["ansible_winrm_transport"] == "ntlm"
+
+    def test_winrm_defaults_cert_validation_to_validate(self):
+        hobj = self._make_host()
+        _setup_host_inventory(hobj, {"host": "win.example.com", "connection": "winrm"})
+        assert hobj.vars["ansible_winrm_server_cert_validation"] == "validate"
+
     def test_winrm_does_not_set_ssh_extra_args(self):
         hobj = self._make_host()
         _setup_host_inventory(hobj, {"host": "win.example.com", "connection": "winrm"})

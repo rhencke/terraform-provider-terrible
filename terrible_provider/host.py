@@ -66,7 +66,7 @@ class TerribleHost(Resource):
                 Attribute(
                     "winrm_port",
                     Number(),
-                    description="WinRM port. Defaults to 5986 when connection is winrm.",
+                    description="WinRM port. Defaults to 5986 when connection is winrm. Requires: pip install terrible[winrm].",
                     optional=True,
                 ),
                 Attribute(
