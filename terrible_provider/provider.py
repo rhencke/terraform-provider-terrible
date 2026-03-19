@@ -10,6 +10,7 @@ from tf.utils import Diagnostics
 from tf.iface import Provider
 
 from .host import TerribleHost
+from .host_group import TerribleHostGroup
 from .play import TerriblePlaybook, TerribleRole
 from .vault import TerribleVault
 from .discovery import discover_task_resources
@@ -95,4 +96,4 @@ class TerribleProvider(Provider):
 
     def get_resources(self) -> list:
         self._ensure_discovered()
-        return [TerribleHost, TerriblePlaybook, TerribleRole, *self._task_resources]
+        return [TerribleHost, TerribleHostGroup, TerriblePlaybook, TerribleRole, *self._task_resources]

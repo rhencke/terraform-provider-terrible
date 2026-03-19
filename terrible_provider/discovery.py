@@ -50,8 +50,15 @@ _FRAMEWORK_ATTRS = [
     Attribute(
         "host_id",
         String(),
-        description="ID of the `terrible_host` to run this task against",
-        required=True,
+        description="ID of the `terrible_host` to run this task against. Mutually exclusive with host_group_id.",
+        optional=True,
+        requires_replace=True,
+    ),
+    Attribute(
+        "host_group_id",
+        String(),
+        description="ID of the `terrible_host_group` to run this task against. Mutually exclusive with host_id.",
+        optional=True,
         requires_replace=True,
     ),
     Attribute("result", NormalizedJson(), description="Full raw JSON result from Ansible", computed=True),

@@ -1134,3 +1134,143 @@ class TestSetupHostInventoryWinRM:
         hobj = self._make_host()
         _setup_host_inventory(hobj, {"host": "linux.example.com", "connection": "ssh"})
         assert "ansible_ssh_extra_args" in hobj.vars
+
+
+# ---------------------------------------------------------------------------
+# host_group_id support
+# ---------------------------------------------------------------------------
+
+class TestHostGroupExecution:
+    _RESULT = {"changed": False, "ping": "pong"}
+
+    def _group(self, host_ids):
+        return {"id": "g1", "host_ids": host_ids}
+
+    def test_both_host_id_and_group_id_adds_error(self):
+        klass = _make_class()
+        prov = _provider(state={"h1": _host(), "g1": self._group(["h1"])})
+        inst = klass(prov)
+        diags = Diagnostics()
+        inst._execute(diags, {"host_id": "h1", "host_group_id": "g1"})
+        assert diags.has_errors()
+
+    def test_neither_host_id_nor_group_id_adds_error(self):
+        klass = _make_class()
+        prov = _provider(state={"h1": _host()})
+        inst = klass(prov)
+        diags = Diagnostics()
+        inst._execute(diags, {})
+        assert diags.has_errors()
+
+    def test_group_not_found_adds_error(self):
+        klass = _make_class()
+        prov = _provider()
+        inst = klass(prov)
+        diags = Diagnostics()
+        inst._execute(diags, {"host_group_id": "missing"})
+        assert diags.has_errors()
+
+    def test_empty_group_adds_error(self):
+        klass = _make_class()
+        prov = _provider(state={"g1": self._group([])})
+        inst = klass(prov)
+        diags = Diagnostics()
+        inst._execute(diags, {"host_group_id": "g1"})
+        assert diags.has_errors()
+
+    def test_host_in_group_not_found_adds_error(self):
+        klass = _make_class()
+        prov = _provider(state={"g1": self._group(["missing"])})
+        inst = klass(prov)
+        diags = Diagnostics()
+        inst._execute(diags, {"host_group_id": "g1"})
+        assert diags.has_errors()
+
+    def test_group_result_is_map_of_host_to_result(self):
+        klass = _make_class()
+        h1 = _host()
+        h2 = {"host": "10.0.0.2", "connection": "local"}
+        prov = _provider(state={"h1": h1, "h2": h2, "g1": self._group(["h1", "h2"])})
+        inst = klass(prov)
+        with patch("terrible_provider.task_base._run_module", return_value=self._RESULT):
+            result, changed, return_attrs = inst._execute(Diagnostics(), {"host_group_id": "g1"})
+        assert "h1" in result
+        assert "h2" in result
+        assert result["h1"] == self._RESULT
+        assert result["h2"] == self._RESULT
+
+    def test_group_changed_true_if_any_host_changed(self):
+        klass = _make_class()
+        h1 = _host()
+        h2 = {"host": "10.0.0.2", "connection": "local"}
+        prov = _provider(state={"h1": h1, "h2": h2, "g1": self._group(["h1", "h2"])})
+        inst = klass(prov)
+        side_effects = [{"changed": False}, {"changed": True}]
+        with patch("terrible_provider.task_base._run_module", side_effect=side_effects):
+            _, changed, _ = inst._execute(Diagnostics(), {"host_group_id": "g1"})
+        assert changed is True
+
+    def test_group_changed_false_if_no_host_changed(self):
+        klass = _make_class()
+        h1 = _host()
+        h2 = {"host": "10.0.0.2", "connection": "local"}
+        prov = _provider(state={"h1": h1, "h2": h2, "g1": self._group(["h1", "h2"])})
+        inst = klass(prov)
+        with patch("terrible_provider.task_base._run_module", return_value={"changed": False}):
+            _, changed, _ = inst._execute(Diagnostics(), {"host_group_id": "g1"})
+        assert changed is False
+
+    def test_group_failure_adds_error(self):
+        klass = _make_class()
+        prov = _provider(state={"h1": _host(), "g1": self._group(["h1"])})
+        inst = klass(prov)
+        diags = Diagnostics()
+        with patch("terrible_provider.task_base._run_module", return_value={"failed": True, "msg": "boom"}):
+            inst._execute(diags, {"host_group_id": "g1"})
+        assert diags.has_errors()
+
+    def test_group_failure_suppressed_with_ignore_errors(self):
+        klass = _make_class()
+        prov = _provider(state={"h1": _host(), "g1": self._group(["h1"])})
+        inst = klass(prov)
+        diags = Diagnostics()
+        with patch("terrible_provider.task_base._run_module", return_value={"failed": True, "msg": "boom"}):
+            inst._execute(diags, {"host_group_id": "g1", "ignore_errors": True})
+        assert not diags.has_errors()
+
+    def test_create_with_group_stores_result_map(self):
+        klass = _make_class()
+        h1 = _host()
+        prov = _provider(state={"h1": h1, "g1": self._group(["h1"])})
+        inst = klass(prov)
+        with patch("terrible_provider.task_base._run_module", return_value=self._RESULT):
+            state = inst.create(_ctx(CreateContext), {"host_group_id": "g1"})
+        assert isinstance(state["result"], dict)
+        assert "h1" in state["result"]
+
+    def test_read_with_group_skips_drift_detection(self):
+        klass = _make_class(check_mode="full")
+        stored = {"id": "rid", "host_group_id": "g1", "result": {}, "changed": False}
+        prov = _provider(state={"rid": stored})
+        inst = klass(prov)
+        with patch("terrible_provider.task_base._run_module") as mock_run:
+            result = inst.read(_ctx(ReadContext), {"id": "rid"})
+        mock_run.assert_not_called()
+        assert result == stored
+
+    def test_framework_schema_has_host_group_id(self):
+        from terrible_provider.discovery import _FRAMEWORK_ATTRS
+        names = {a.name for a in _FRAMEWORK_ATTRS}
+        assert "host_group_id" in names
+
+    def test_host_id_is_optional_in_schema(self):
+        from terrible_provider.discovery import _FRAMEWORK_ATTRS
+        attrs = {a.name: a for a in _FRAMEWORK_ATTRS}
+        assert attrs["host_id"].optional
+        assert not attrs["host_id"].required
+
+    def test_build_args_skips_host_group_id(self):
+        from terrible_provider.task_base import _build_args_str
+        result = _build_args_str({"host_group_id": "g1", "path": "/tmp/f"})
+        import json
+        assert json.loads(result) == {"path": "/tmp/f"}

@@ -234,7 +234,7 @@ def _run_module(
 
 
 _SKIP_ATTRS = frozenset({
-    "id", "host_id", "result", "changed", "triggers",
+    "id", "host_id", "host_group_id", "result", "changed", "triggers",
     "timeout", "ignore_errors", "changed_when", "failed_when",
     "environment", "tags", "skip_tags",
     "async_seconds", "poll_interval",
@@ -301,7 +301,25 @@ class TerribleTaskBase(Resource):
             )
         return h
 
+    def _validate_host_target(self, diags, planned: dict) -> bool:
+        """Return True iff exactly one of host_id / host_group_id is set."""
+        has_host = bool(planned.get("host_id"))
+        has_group = bool(planned.get("host_group_id"))
+        if has_host == has_group:
+            diags.add_error(
+                "Exactly one of host_id or host_group_id must be set",
+                "Set host_id to target a single host or host_group_id to target a group.",
+            )
+            return False
+        return True
+
     def _execute(self, diags, planned: dict) -> tuple[dict, bool, dict]:
+        if not self._validate_host_target(diags, planned):
+            return {}, False, {}
+
+        if planned.get("host_group_id"):
+            return self._execute_group(diags, planned)
+
         host = self._resolve_host(planned["host_id"], diags)
         if host is None:
             return {}, False, {}
@@ -338,6 +356,59 @@ class TerribleTaskBase(Resource):
         }
         return result, changed, return_attrs
 
+    def _execute_group(self, diags, planned: dict) -> tuple[dict, bool, dict]:
+        """Run the module against every host in a host_group, sequentially."""
+        group_id = planned["host_group_id"]
+        group = self._prov._state.get(group_id)
+        if group is None:
+            diags.add_error(
+                f"Host group '{group_id}' not found",
+                "Ensure the terrible_host_group resource exists and has been applied.",
+            )
+            return {}, False, {}
+
+        host_ids = group.get("host_ids") or []
+        if not host_ids:
+            diags.add_error(
+                f"Host group '{group_id}' has no hosts",
+                "Add at least one host ID to the group's host_ids list.",
+            )
+            return {}, False, {}
+
+        args_str = _build_args_str(planned)
+        results: dict = {}
+        any_changed = False
+
+        for hid in host_ids:
+            host = self._prov._state.get(hid)
+            if host is None:
+                diags.add_error(
+                    f"Host '{hid}' in group '{group_id}' not found",
+                    "Ensure the terrible_host resource exists and has been applied.",
+                )
+                return {}, False, {}
+            result = _run_module(
+                host, self.__class__._module_name, args_str,
+                timeout=planned.get("timeout"),
+                changed_when=planned.get("changed_when"),
+                failed_when=planned.get("failed_when"),
+                environment=planned.get("environment"),
+                tags=planned.get("tags"),
+                skip_tags=planned.get("skip_tags"),
+                async_seconds=planned.get("async_seconds"),
+                poll_interval=planned.get("poll_interval"),
+                vault_secrets=self._prov._vault_secrets,
+            )
+            if result.get("changed"):
+                any_changed = True
+            if result.get("failed") or result.get("unreachable"):
+                if not planned.get("ignore_errors"):
+                    diags.add_error("Ansible task failed", result.get("msg", "unknown error"))
+            results[hid] = result
+
+        # result is a host→result map; individual return attrs are not meaningful for groups
+        return results, any_changed, {}
+
     def create(self, ctx: CreateContext, planned: dict) -> Optional[dict]:
         result, changed, return_attrs = self._execute(ctx.diagnostics, planned)
         new_id = uuid.uuid4().hex
@@ -365,6 +436,9 @@ class TerribleTaskBase(Resource):
 
         if self.__class__._check_mode_support != "full":
             return stored  # input-hash idempotency only
+
+        if stored.get("host_group_id"):
+            return stored  # drift detection not supported for group targets
 
         result = self._execute_check(ctx.diagnostics, stored)
         if result is None:
