@@ -222,3 +222,4 @@ pre-commit and CI. It executes:
 - Always close GitHub issues when implementing their features.
 - Always tag releases with release notes — never leave notes empty.
 - Before the first commit in a session, check if `.git/hooks/pre-commit` exists. If not, run `scripts/install-hooks.sh`.
+- After opening or pushing to a PR, always wait for the Codex review bot (`chatgpt-codex-connector[bot]`) to comment. Address all its suggestions, reply to each comment, and resolve all conversations before merging.
