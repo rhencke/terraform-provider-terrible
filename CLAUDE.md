@@ -148,7 +148,7 @@ Two sequential stages — nothing publishes until all of stage 1 passes:
 
 The Terraform Registry requires GPG-signed releases. Secrets stored in GitHub Actions (`GPG_PRIVATE_KEY`, `GPG_PASSPHRASE`) are the source of truth — no local copy needed since signing only happens in CI.
 
-To rotate: generate a new Ed25519 key, update the GitHub Secrets, register the new public key on registry.terraform.io (leave the old key registered to cover historical releases).
+To rotate: generate a new RSA 4096-bit key (registry.terraform.io requires RSA or DSA — Ed25519 is not supported), update the GitHub Secrets, register the new public key on registry.terraform.io (leave the old key registered to cover historical releases).
 
 ## Pre-commit Hook
 
