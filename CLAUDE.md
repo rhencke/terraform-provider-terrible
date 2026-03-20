@@ -135,7 +135,7 @@ The script runs tests, tags, pushes, creates the GitHub release, and watches the
 Two sequential stages — nothing publishes until all of stage 1 passes:
 
 **Stage 1 — validate (all platforms):**
-- Unit tests (100% coverage) on all 4 platform runners (linux/amd64, linux/arm64, darwin/amd64, darwin/arm64)
+- Unit tests (100% coverage) on all 3 platform runners (linux/amd64, linux/arm64, darwin/arm64)
 - Integration tests (skipped on arm64 — OpenTofu has no arm64 Linux binary in the setup action yet)
 - PyInstaller binary builds
 - Windows is not supported as a control node (Ansible requires Unix); use WSL on Windows hosts

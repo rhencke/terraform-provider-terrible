@@ -26,6 +26,8 @@ extension easy for Python-savvy operators.
 
 **Linux and macOS only.** Ansible does not support Windows as a control node — the machine running Terraform and this provider must be Linux or macOS. Windows machines can be *targeted* via WinRM, but the provider itself cannot run on Windows. Use WSL if you need to run Terraform on a Windows host.
 
+Binaries are provided for Linux (amd64, arm64) and macOS (arm64). Intel Mac users can run the arm64 binary transparently via Rosetta 2.
+
 ## Installation
 
 This repository is a minimal implementation — it does not publish a binary
