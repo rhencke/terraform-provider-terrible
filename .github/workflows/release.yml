@@ -23,15 +23,9 @@ jobs:
           - os: ubuntu-24.04-arm
             goos: linux
             goarch: arm64
-          - os: macos-13
-            goos: darwin
-            goarch: amd64
           - os: macos-latest
             goos: darwin
             goarch: arm64
-          - os: windows-latest
-            goos: windows
-            goarch: amd64
 
     steps:
       - uses: actions/checkout@v4
@@ -44,8 +38,9 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
+      # OpenTofu has no arm64 Linux binary in the setup action yet
       - name: Install OpenTofu
-        if: matrix.goos != 'windows'
+        if: "!(matrix.goos == 'linux' && matrix.goarch == 'arm64')"
         uses: opentofu/setup-opentofu@v1
         with:
           tofu_wrapper: false
@@ -57,7 +52,7 @@ jobs:
         run: uv run pytest tests/ --ignore=tests/integration -q
 
       - name: Integration tests
-        if: matrix.goos != 'windows'
+        if: "!(matrix.goos == 'linux' && matrix.goarch == 'arm64')"
         run: make integration-test
 
       - name: Build PyInstaller binary
@@ -69,9 +64,6 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           BINARY="terraform-provider-terrible_v${VERSION}"
-          if [[ "${{ matrix.goos }}" == "windows" ]]; then
-            BINARY="${BINARY}.exe"
-          fi
           ZIP="terraform-provider-terrible_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}.zip"
           echo "binary=${BINARY}" >> "$GITHUB_OUTPUT"
           echo "zip=${ZIP}" >> "$GITHUB_OUTPUT"
@@ -79,22 +71,13 @@ jobs:
 
       - name: Rename binary
         shell: bash
-        run: |
-          DIST="dist/terraform-provider-terrible"
-          if [[ "${{ matrix.goos }}" == "windows" ]]; then
-            DIST="${DIST}.exe"
-          fi
-          mv "$DIST" "dist/${{ steps.names.outputs.binary }}"
+        run: mv "dist/terraform-provider-terrible" "dist/${{ steps.names.outputs.binary }}"
 
       - name: Zip binary
         shell: bash
         run: |
           cd dist
-          if [[ "${{ matrix.goos }}" == "windows" ]]; then
-            7z a "../${{ steps.names.outputs.zip }}" "${{ steps.names.outputs.binary }}"
-          else
-            zip "../${{ steps.names.outputs.zip }}" "${{ steps.names.outputs.binary }}"
-          fi
+          zip "../${{ steps.names.outputs.zip }}" "${{ steps.names.outputs.binary }}"
 
       - name: Upload zip artifact
         uses: actions/upload-artifact@v4
