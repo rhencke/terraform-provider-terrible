@@ -24,5 +24,3 @@ terraform init
 terraform apply -auto-approve
 ```
 
-Notes:
-- The provider stores state in `terrible_state.json` by default in the repo root. You can change it via provider configuration `state_file`.

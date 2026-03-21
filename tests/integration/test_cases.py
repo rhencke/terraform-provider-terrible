@@ -72,7 +72,6 @@ def test_case(case_dir, tmp_path, provider_install, host_vars):
     }
     # init doesn't call ConfigureProvider; strip reattach to avoid edge cases
     tf_env_init = {k: v for k, v in tf_env.items() if k != "TF_REATTACH_PROVIDERS"}
-    state_file = str(tmp_path / "terrible.json")
     name = case_dir.name
 
     print(f"\n[{name}]", flush=True)
@@ -101,7 +100,7 @@ def test_case(case_dir, tmp_path, provider_install, host_vars):
         # --- Act ---
         _tf(
             "apply",
-            [tf_bin, "apply", "-auto-approve", "-no-color", "-var", f"state_file={state_file}", *extra_vars],
+            [tf_bin, "apply", "-auto-approve", "-no-color", *extra_vars],
             ws=ws,
             env=tf_env,
         )
@@ -129,7 +128,7 @@ def test_case(case_dir, tmp_path, provider_install, host_vars):
         # --- Assert: no drift on a second plan ---
         result = _tf(
             "plan (idempotency)",
-            [tf_bin, "plan", "-detailed-exitcode", "-no-color", "-var", f"state_file={state_file}", *extra_vars],
+            [tf_bin, "plan", "-detailed-exitcode", "-no-color", *extra_vars],
             ws=ws,
             env=tf_env,
             check=False,
@@ -141,7 +140,7 @@ def test_case(case_dir, tmp_path, provider_install, host_vars):
     finally:
         _tf(
             "destroy",
-            [tf_bin, "destroy", "-auto-approve", "-no-color", "-var", f"state_file={state_file}", *extra_vars],
+            [tf_bin, "destroy", "-auto-approve", "-no-color", *extra_vars],
             ws=ws,
             env=tf_env,
             check=False,

@@ -7,13 +7,7 @@ terraform {
   }
 }
 
-variable "state_file" {
-  description = "Path for the terrible provider state file"
-  default     = "/tmp/terraform_provider_state.json"
-}
-
 provider "terrible" {
-  state_file = var.state_file
 }
 
 resource "terrible_host" "web" {

@@ -10,7 +10,6 @@
 #   - force-restart a service after a package upgrade
 #
 # Run with:
-#   tofu apply -var="app_version=1.2.3" -var="state_file=/tmp/triggers_state.json"
 
 terraform {
   required_providers {
@@ -19,11 +18,6 @@ terraform {
       version = "0.0.1"
     }
   }
-}
-
-variable "state_file" {
-  description = "Path for the terrible provider state file"
-  default     = "/tmp/triggers_state.json"
 }
 
 variable "app_version" {
@@ -37,7 +31,6 @@ variable "config_content" {
 }
 
 provider "terrible" {
-  state_file = var.state_file
 }
 
 resource "terrible_host" "app" {

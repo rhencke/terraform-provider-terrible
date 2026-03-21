@@ -380,8 +380,6 @@ class TerribleTaskBase(Resource):
         result, changed, return_attrs = self._execute(ctx.diagnostics, planned)
         new_id = uuid.uuid4().hex
         state = {**planned, **return_attrs, "id": new_id, "result": result, "changed": changed}
-        self._prov._state[new_id] = state
-        self._prov._save_state()
         return state
 
     def _execute_check(self, diags, current: dict) -> dict | None:
@@ -399,29 +397,31 @@ class TerribleTaskBase(Resource):
         )
 
     def read(self, ctx: ReadContext, current: dict) -> dict | None:
-        stored = self._prov._state.get(current["id"])
-        if stored is None:
-            return None
-
         if self.__class__._check_mode_support != "full":
-            return stored  # input-hash idempotency only
+            return current  # input-hash idempotency only
 
-        result = self._execute_check(ctx.diagnostics, stored)
+        # For full check_mode, execute against the live host. If the host isn't
+        # in the in-memory state yet (ordering not guaranteed during refresh),
+        # fall back to the stored state — Terraform will reconcile next apply.
+        if current.get("host_id") not in self._prov._state:
+            return current
+
+        result = self._execute_check(ctx.diagnostics, current)
         if result is None:
-            return stored  # host error — don't signal deletion
+            return current  # host error — don't signal deletion
 
         if result.get("failed") or result.get("unreachable"):
             ctx.diagnostics.add_warning(
                 "Ansible check mode failed during refresh",
                 result.get("msg", "unknown error"),
             )
-            return stored
+            return current
 
         if not result.get("changed", False):
-            return stored  # up to date, no drift
+            return current  # up to date, no drift
 
         # Drift detected — clear computed outputs so Terraform plans an update()
-        drift_state = dict(stored)
+        drift_state = dict(current)
         drift_state["result"] = None
         drift_state["changed"] = None
         for name in self.__class__._return_attr_names:
@@ -432,13 +432,10 @@ class TerribleTaskBase(Resource):
         result, changed, return_attrs = self._execute(ctx.diagnostics, planned)
         rid = current["id"]
         state = {**planned, **return_attrs, "id": rid, "result": result, "changed": changed}
-        self._prov._state[rid] = state
-        self._prov._save_state()
         return state
 
     def delete(self, ctx: DeleteContext, current: dict):
-        self._prov._state.pop(current.get("id"), None)
-        self._prov._save_state()
+        pass
 
     def import_(self, ctx: ImportContext, id: str) -> dict | None:
         return self._prov._state.get(id)

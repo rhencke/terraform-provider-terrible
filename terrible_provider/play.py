@@ -322,25 +322,17 @@ class _PlayResourceBase(Resource):
     def create(self, ctx: CreateContext, planned: dict) -> dict | None:
         result, changed = self._execute(ctx.diagnostics, planned)
         new_id = uuid.uuid4().hex
-        state = {**planned, "id": new_id, "result": result, "changed": changed}
-        self._prov._state[new_id] = state
-        self._prov._save_state()
-        return state
+        return {**planned, "id": new_id, "result": result, "changed": changed}
 
     def read(self, ctx: ReadContext, current: dict) -> dict | None:
-        return self._prov._state.get(current["id"])
+        return current
 
     def update(self, ctx: UpdateContext, current: dict, planned: dict) -> dict | None:
         result, changed = self._execute(ctx.diagnostics, planned)
-        rid = current["id"]
-        state = {**planned, "id": rid, "result": result, "changed": changed}
-        self._prov._state[rid] = state
-        self._prov._save_state()
-        return state
+        return {**planned, "id": current["id"], "result": result, "changed": changed}
 
     def delete(self, ctx: DeleteContext, current: dict):
-        self._prov._state.pop(current.get("id"), None)
-        self._prov._save_state()
+        pass
 
     def import_(self, ctx: ImportContext, id: str) -> dict | None:
         return self._prov._state.get(id)

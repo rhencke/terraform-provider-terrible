@@ -1,6 +1,5 @@
 """Unit tests for TerribleProvider."""
 
-import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -15,78 +14,41 @@ def _diags():
     return Diagnostics()
 
 
-class TestStateIO:
-    def test_load_state_reads_json(self, tmp_path):
-        sf = tmp_path / "state.json"
-        sf.write_text(json.dumps({"abc": {"id": "abc", "host": "1.2.3.4"}}))
-        prov = TerribleProvider.__new__(TerribleProvider)
-        prov._state_file = sf
-        prov._state = {}
-        prov._load_state()
-        assert prov._state["abc"]["host"] == "1.2.3.4"
-
-    def test_load_state_missing_file_starts_empty(self, tmp_path):
-        prov = TerribleProvider.__new__(TerribleProvider)
-        prov._state_file = tmp_path / "nonexistent.json"
-        prov._state = {}
-        prov._load_state()
-        assert prov._state == {}
-
-    def test_load_state_corrupt_file_starts_empty(self, tmp_path):
-        sf = tmp_path / "state.json"
-        sf.write_text("not json{{")
-        prov = TerribleProvider.__new__(TerribleProvider)
-        prov._state_file = sf
-        prov._state = {}
-        prov._load_state()
-        assert prov._state == {}
-
-    def test_save_state_writes_json(self, tmp_path):
-        sf = tmp_path / "state.json"
-        prov = TerribleProvider.__new__(TerribleProvider)
-        prov._state_file = sf
-        prov._state = {"abc": {"id": "abc"}}
-        prov._save_state()
-        assert json.loads(sf.read_text()) == {"abc": {"id": "abc"}}
-
-
 class TestConfigure:
-    def test_configure_uses_default_state_file(self, tmp_path):
+    def test_configure_no_state_file_attr(self):
         prov = TerribleProvider.__new__(TerribleProvider)
-        prov._state_file = tmp_path / "state.json"
         prov._state = {}
         prov.configure_provider(_diags(), {})
         assert prov._state == {}
 
-    def test_configure_overrides_state_file(self, tmp_path):
-        sf = tmp_path / "custom.json"
+    def test_configure_vault_password(self):
         prov = TerribleProvider.__new__(TerribleProvider)
-        prov._state_file = tmp_path / "default.json"
         prov._state = {}
-        prov.configure_provider(_diags(), {"state_file": str(sf)})
-        assert prov._state_file == sf
+        prov.configure_provider(_diags(), {"vault_password": "mysecret"})
+        assert prov._vault_secrets is not None
+        assert len(prov._vault_secrets) == 1
+        assert prov._vault_secrets[0][0] == "default"
 
-    def test_configure_creates_parent_dir(self, tmp_path):
-        sf = tmp_path / "subdir" / "state.json"
+    def test_configure_vault_password_file(self, tmp_path):
+        vpf = tmp_path / "vaultpass.txt"
+        vpf.write_text("file_secret\n")
         prov = TerribleProvider.__new__(TerribleProvider)
-        prov._state_file = sf
+        prov._state = {}
+        prov.configure_provider(_diags(), {"vault_password_file": str(vpf)})
+        assert prov._vault_secrets is not None
+
+    def test_configure_vault_password_file_missing(self):
+        prov = TerribleProvider.__new__(TerribleProvider)
+        prov._state = {}
+        diags = _diags()
+        prov.configure_provider(diags, {"vault_password_file": "/nonexistent/vault.txt"})
+        assert diags.has_errors()
+
+    def test_configure_no_vault(self):
+        prov = TerribleProvider.__new__(TerribleProvider)
         prov._state = {}
         prov.configure_provider(_diags(), {})
-        assert sf.parent.exists()
-
-    def test_configure_mkdir_failure_logs_warning(self, tmp_path, caplog):
-        import logging
-
-        prov = TerribleProvider.__new__(TerribleProvider)
-        # Use a non-existent subdir so configure_provider tries to call mkdir
-        prov._state_file = tmp_path / "newdir" / "state.json"
-        prov._state = {}
-        with (
-            patch.object(Path, "mkdir", side_effect=OSError("denied")),
-            caplog.at_level(logging.WARNING, logger="terrible_provider.provider"),
-        ):
-            prov.configure_provider(_diags(), {})
-        assert any("denied" in r.message for r in caplog.records)
+        assert prov._vault_secrets is None
 
 
 class TestGetResourcesAndDataSources:
@@ -134,11 +96,11 @@ class TestGetResourcesAndDataSources:
         prov = TerribleProvider.__new__(TerribleProvider)
         assert prov.get_model_prefix() == "terrible_"
 
-    def test_get_provider_schema_has_state_file_attr(self):
+    def test_get_provider_schema_has_no_state_file_attr(self):
         prov = TerribleProvider.__new__(TerribleProvider)
         schema = prov.get_provider_schema(_diags())
         names = {a.name for a in schema.attributes}
-        assert "state_file" in names
+        assert "state_file" not in names
 
     def test_validate_config_is_noop(self):
         prov = TerribleProvider.__new__(TerribleProvider)
@@ -187,60 +149,12 @@ class TestVaultConfiguration:
         prov.validate_config(diags, {"vault_password_file": "/some/file"})
         assert not diags.has_errors()
 
-    def test_configure_vault_password(self, tmp_path):
-        prov = TerribleProvider.__new__(TerribleProvider)
-        prov._state_file = tmp_path / "state.json"
-        prov._state = {}
-        prov.configure_provider(_diags(), {"vault_password": "mysecret"})
-        assert prov._vault_secrets is not None
-        assert len(prov._vault_secrets) == 1
-        assert prov._vault_secrets[0][0] == "default"
-
-    def test_configure_vault_password_file(self, tmp_path):
-        vpf = tmp_path / "vaultpass.txt"
-        vpf.write_text("file_secret\n")
-        prov = TerribleProvider.__new__(TerribleProvider)
-        prov._state_file = tmp_path / "state.json"
-        prov._state = {}
-        prov.configure_provider(_diags(), {"vault_password_file": str(vpf)})
-        assert prov._vault_secrets is not None
-
-    def test_configure_vault_password_file_missing(self, tmp_path):
-        prov = TerribleProvider.__new__(TerribleProvider)
-        prov._state_file = tmp_path / "state.json"
-        prov._state = {}
-        diags = _diags()
-        prov.configure_provider(diags, {"vault_password_file": "/nonexistent/vault.txt"})
-        assert diags.has_errors()
-
-    def test_configure_no_vault(self, tmp_path):
-        prov = TerribleProvider.__new__(TerribleProvider)
-        prov._state_file = tmp_path / "state.json"
-        prov._state = {}
-        prov.configure_provider(_diags(), {})
-        assert prov._vault_secrets is None
-
 
 class TestInit:
-    def test_default_state_file(self):
+    def test_init_starts_with_empty_state(self):
         with patch("terrible_provider.provider.discover_task_resources", return_value=([], [])):
             prov = TerribleProvider()
-        assert prov._state_file.name == "terrible_state.json"
         assert prov._state == {}
         assert prov._task_resources is None
         assert prov._task_datasources is None
-
-
-class TestSaveStateError:
-    def test_save_state_logs_error_on_failure(self, tmp_path, caplog):
-        import logging
-
-        prov = TerribleProvider.__new__(TerribleProvider)
-        prov._state_file = tmp_path / "state.json"
-        prov._state = {"x": {}}
-        with (
-            patch.object(Path, "write_text", side_effect=OSError("no space")),
-            caplog.at_level(logging.ERROR, logger="terrible_provider.provider"),
-        ):
-            prov._save_state()
-        assert any("no space" in r.message for r in caplog.records)
+        assert not hasattr(prov, "_state_file")

@@ -107,24 +107,25 @@ class TerribleHost(Resource):
         if state.get("port") is None:
             state["port"] = 22
         self._prov._state[new_id] = state
-        self._prov._save_state()
         return state
 
     def read(self, ctx: ReadContext, current: dict) -> dict | None:
+        # Repopulate the in-memory state so tasks executing after this read
+        # can resolve the host without a separate state file.
         rid = current.get("id")
-        return self._prov._state.get(rid)
+        if rid:
+            self._prov._state[rid] = current
+        return current
 
     def update(self, ctx: UpdateContext, current: dict, planned: dict) -> dict | None:
         rid = current["id"]
         state = {**planned, "id": rid}
         self._prov._state[rid] = state
-        self._prov._save_state()
         return state
 
     def delete(self, ctx: DeleteContext, current: dict):
         rid = current.get("id")
         self._prov._state.pop(rid, None)
-        self._prov._save_state()
 
     def import_(self, ctx: ImportContext, id: str) -> dict | None:
         return self._prov._state.get(id)

@@ -50,7 +50,6 @@ def _make_class(options=None, returns=None, check_mode="none"):
 def _provider(state=None):
     prov = MagicMock()
     prov._state = state or {}
-    prov._save_state = MagicMock()
     return prov
 
 
@@ -192,15 +191,13 @@ class TestResolveHost:
 class TestCRUD:
     _RESULT = {"changed": False, "rc": 0}
 
-    def test_create_stores_state(self):
+    def test_create_returns_state(self):
         klass = _make_class(returns={"rc": {"type": "int"}})
         prov = _provider(state={"h1": _host()})
         inst = klass(prov)
         with patch("terrible_provider.task_base._run_module", return_value=self._RESULT):
             state = inst.create(_ctx(CreateContext), {"host_id": "h1"})
         assert "id" in state
-        assert state["id"] in prov._state
-        prov._save_state.assert_called_once()
 
     def test_create_host_not_found_adds_error(self):
         klass = _make_class()
@@ -211,22 +208,19 @@ class TestCRUD:
             inst.create(ctx, {"host_id": "missing"})
         assert ctx.diagnostics.has_errors()
 
-    def test_update_replaces_state(self):
+    def test_update_returns_state(self):
         klass = _make_class(returns={"rc": {"type": "int"}})
         prov = _provider(state={"h1": _host(), "rid": {"id": "rid", "host_id": "h1"}})
         inst = klass(prov)
         with patch("terrible_provider.task_base._run_module", return_value=self._RESULT):
             state = inst.update(_ctx(UpdateContext), {"id": "rid", "host_id": "h1"}, {"host_id": "h1"})
         assert state["id"] == "rid"
-        prov._save_state.assert_called_once()
 
-    def test_delete_removes_state(self):
+    def test_delete_is_noop(self):
         klass = _make_class()
         prov = _provider(state={"rid": {"id": "rid"}})
         inst = klass(prov)
-        inst.delete(_ctx(DeleteContext), {"id": "rid"})
-        assert "rid" not in prov._state
-        prov._save_state.assert_called_once()
+        inst.delete(_ctx(DeleteContext), {"id": "rid"})  # should not raise
 
     def test_import_returns_by_id(self):
         klass = _make_class()
@@ -248,64 +242,59 @@ class TestCRUD:
 
 
 class TestRead:
-    def test_read_returns_stored_state(self):
-        klass = _make_class()
-        stored = {"id": "rid", "host_id": "h1"}
-        prov = _provider(state={"rid": stored})
-        inst = klass(prov)
-        result = inst.read(_ctx(ReadContext), {"id": "rid"})
-        assert result == stored
-
-    def test_read_returns_none_when_not_in_state(self):
-        klass = _make_class()
-        prov = _provider()
-        inst = klass(prov)
-        assert inst.read(_ctx(ReadContext), {"id": "gone"}) is None
-
-    def test_read_no_check_mode_returns_stored(self):
+    def test_read_no_check_mode_returns_current(self):
         klass = _make_class(check_mode="none")
-        stored = {"id": "rid", "host_id": "h1", "result": {}, "changed": False}
-        prov = _provider(state={"h1": _host(), "rid": stored})
+        current = {"id": "rid", "host_id": "h1", "result": {}, "changed": False}
+        prov = _provider(state={"h1": _host()})
         inst = klass(prov)
-        result = inst.read(_ctx(ReadContext), {"id": "rid"})
-        assert result == stored
+        result = inst.read(_ctx(ReadContext), current)
+        assert result == current
 
-    def test_read_check_mode_no_drift_returns_stored(self):
+    def test_read_check_mode_no_drift_returns_current(self):
         klass = _make_class(check_mode="full")
-        stored = {"id": "rid", "host_id": "h1", "result": {}, "changed": False}
-        prov = _provider(state={"h1": _host(), "rid": stored})
+        current = {"id": "rid", "host_id": "h1", "result": {}, "changed": False}
+        prov = _provider(state={"h1": _host()})
         inst = klass(prov)
         with patch("terrible_provider.task_base._run_module", return_value={"changed": False}):
-            result = inst.read(_ctx(ReadContext), {"id": "rid"})
-        assert result == stored
+            result = inst.read(_ctx(ReadContext), current)
+        assert result == current
 
     def test_read_check_mode_drift_clears_outputs(self):
         klass = _make_class(returns={"rc": {"type": "int"}}, check_mode="full")
-        stored = {"id": "rid", "host_id": "h1", "rc": 0, "result": {}, "changed": False}
-        prov = _provider(state={"h1": _host(), "rid": stored})
+        current = {"id": "rid", "host_id": "h1", "rc": 0, "result": {}, "changed": False}
+        prov = _provider(state={"h1": _host()})
         inst = klass(prov)
         with patch("terrible_provider.task_base._run_module", return_value={"changed": True}):
-            result = inst.read(_ctx(ReadContext), {"id": "rid"})
+            result = inst.read(_ctx(ReadContext), current)
         assert result["rc"] is None
         assert result["result"] is None
         assert result["changed"] is None
 
-    def test_read_check_mode_failed_returns_stored_with_warning(self):
+    def test_read_check_mode_failed_returns_current_with_warning(self):
         klass = _make_class(check_mode="full")
-        stored = {"id": "rid", "host_id": "h1", "result": {}, "changed": False}
-        prov = _provider(state={"h1": _host(), "rid": stored})
+        current = {"id": "rid", "host_id": "h1", "result": {}, "changed": False}
+        prov = _provider(state={"h1": _host()})
         inst = klass(prov)
         with patch("terrible_provider.task_base._run_module", return_value={"failed": True, "msg": "oops"}):
-            result = inst.read(_ctx(ReadContext), {"id": "rid"})
-        assert result == stored
+            result = inst.read(_ctx(ReadContext), current)
+        assert result == current
 
-    def test_read_check_mode_host_error_returns_stored(self):
+    def test_read_check_mode_host_not_in_state_returns_current(self):
         klass = _make_class(check_mode="full")
-        stored = {"id": "rid", "host_id": "missing", "result": {}, "changed": False}
-        prov = _provider(state={"rid": stored})  # host NOT in state
+        current = {"id": "rid", "host_id": "missing", "result": {}, "changed": False}
+        prov = _provider()  # host NOT in state
         inst = klass(prov)
-        result = inst.read(_ctx(ReadContext), {"id": "rid"})
-        assert result == stored
+        result = inst.read(_ctx(ReadContext), current)
+        assert result == current
+
+    def test_read_check_mode_host_resolves_none_returns_current(self):
+        # host_id key exists in _state but value is None — _resolve_host returns None
+        klass = _make_class(check_mode="full")
+        current = {"id": "rid", "host_id": "h1", "result": {}, "changed": False}
+        prov = _provider(state={"h1": None})
+        inst = klass(prov)
+        result = inst.read(_ctx(ReadContext), current)
+        assert result == current
 
 
 # ---------------------------------------------------------------------------

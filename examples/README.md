@@ -10,7 +10,7 @@ All examples that target localhost can be run with:
 make install-provider          # build + install the provider binary once
 cd examples/<name>
 tofu init
-tofu apply -var="state_file=/tmp/<name>_state.json"
+tofu apply
 ```
 
 ---

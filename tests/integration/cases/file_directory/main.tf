@@ -7,15 +7,14 @@ terraform {
   }
 }
 
-variable "state_file"  { type = string }
-variable "connection"  { default = "local" }
-variable "host"        { default = "127.0.0.1" }
-variable "ssh_port"    { default = 22 }
-variable "ssh_user"    { default = "" }
-variable "ssh_key"     { default = "" }
+variable "connection" { default = "local" }
+variable "host"       { default = "127.0.0.1" }
+variable "ssh_port"   { default = 22 }
+variable "ssh_user"   { default = "" }
+variable "ssh_key"    { default = "" }
+
 
 provider "terrible" {
-  state_file = var.state_file
 }
 
 resource "terrible_host" "target" {

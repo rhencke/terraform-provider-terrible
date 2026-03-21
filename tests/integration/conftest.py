@@ -141,6 +141,7 @@ def provider_install(tmp_path_factory, provider_process):
     }
 
 
+
 @pytest.fixture(scope="session")
 def host_vars() -> list[str]:
     """

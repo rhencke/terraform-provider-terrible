@@ -7,10 +7,6 @@ terraform {
   }
 }
 
-variable "state_file" {
-  description = "Path for the terrible provider state file"
-  default     = "/tmp/delegate_to_state.json"
-}
 variable "connection"  { default = "local" }
 variable "host"        { default = "127.0.0.1" }
 variable "ssh_port"    { default = 22 }
@@ -18,7 +14,6 @@ variable "ssh_user"    { default = "" }
 variable "ssh_key"     { default = "" }
 
 provider "terrible" {
-  state_file = var.state_file
 }
 
 # Host A — the "logical" target

@@ -7,7 +7,6 @@
 # → verify it is running.  Each step only runs if the previous succeeded.
 #
 # Run with:
-#   tofu apply -var="state_file=/tmp/task_chain_state.json"
 
 terraform {
   required_providers {
@@ -18,13 +17,7 @@ terraform {
   }
 }
 
-variable "state_file" {
-  description = "Path for the terrible provider state file"
-  default     = "/tmp/task_chain_state.json"
-}
-
 provider "terrible" {
-  state_file = var.state_file
 }
 
 resource "terrible_host" "app" {
