@@ -20,6 +20,9 @@ install-provider = "terrible_provider.install:main"
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+include = ["terrible_provider*"]
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
