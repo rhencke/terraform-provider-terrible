@@ -9,8 +9,8 @@ description: |-
 # terrible Provider
 
 The **terrible** provider bridges Terraform and Ansible: define target hosts and
-Ansible task executions as Terraform resources and keep everything in Terraform
-state — no Ansible inventory required.
+Ansible task/playbook executions as Terraform resources and keep everything in
+Terraform state — no Ansible inventory required.
 
 Resource types:
 
