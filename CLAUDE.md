@@ -6,11 +6,11 @@
 
 Resource types:
 - `terrible_host` — target host (SSH, WinRM, local, docker, etc.)
-- `terrible_ansible_builtin_*` — dynamically-generated task resources, one per Ansible module
-- `terrible_playbook` — runs an Ansible playbook file
-- `terrible_role` — runs an Ansible role
+- `terrible_*` — dynamically-generated task resources, one per Ansible module (builtin modules strip the `ansible.builtin.` prefix, e.g. `terrible_ping`, `terrible_command`; community modules use the full dotted namespace as underscores, e.g. `terrible_community_general_git_config`)
+- `terrible_playbook` — runs an Ansible playbook file (deprecated)
+- `terrible_role` — runs an Ansible role (deprecated)
 - `terrible_vault` (data source) — decrypts Ansible Vault ciphertext
-- `terrible_datasource_ansible_builtin_*` — task data sources for modules with full check mode support
+- `terrible_datasource_*` — task data sources for modules with full check mode support
 
 Task resources are discovered dynamically from installed Ansible modules at runtime. Schemas are generated from each module's `DOCUMENTATION` and `RETURN` blocks and cached in SQLite.
 
