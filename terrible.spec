@@ -23,7 +23,7 @@ jinja2_datas, jinja2_binaries, jinja2_hiddenimports = collect_all('jinja2')
 crypto_datas, crypto_binaries, crypto_hiddenimports = collect_all('cryptography')
 
 a = Analysis(
-    ['terrible_provider/cli.py'],
+    ['_terrible_main.py'],
     pathex=['.'],
     binaries=ansible_binaries + tf_binaries + grpc_binaries + crypto_binaries,
     datas=(
