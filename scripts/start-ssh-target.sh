@@ -15,6 +15,7 @@ chmod 600 ~/.ssh/authorized_keys
 
 # Start sshd on port 2222 (doesn't need root, uses user config)
 if command -v sshd >/dev/null 2>&1; then
+    sudo mkdir -p /run/sshd
     sudo /usr/sbin/sshd -p 2222 -o StrictModes=no
 else
     echo "ERROR: sshd not found" >&2
