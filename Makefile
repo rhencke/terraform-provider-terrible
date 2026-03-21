@@ -47,7 +47,7 @@ build-binary:
 	@echo "Binary built: ./dist/terraform-provider-terrible"
 
 docs: install-provider
-	TFPLUGINDOCS=/tmp/tfplugindocs scripts/generate-docs.sh
+	scripts/generate-docs.sh
 
 release:
 	@test -n "$(VERSION)" || (echo "Usage: make release VERSION=x.y.z"; exit 1)
