@@ -4,7 +4,7 @@
 # Requires:
 #   - tofu or terraform in PATH
 #   - tfplugindocs in PATH or TFPLUGINDOCS env var
-#   - Provider installed locally (make install-provider)
+#   - uv in PATH (provider run via `uv run terraform-provider-terrible --dev`)
 #
 # Usage:
 #   scripts/generate-docs.sh
@@ -29,9 +29,31 @@ if ! command -v "${TFPLUGINDOCS}" &>/dev/null; then
 fi
 
 TMPDIR="$(mktemp -d)"
-trap 'rm -rf "${TMPDIR}"' EXIT
+PROVIDER_LOG="${TMPDIR}/provider.log"
+trap 'rm -rf "${TMPDIR}"; kill "${PROVIDER_PID}" 2>/dev/null || true' EXIT
 
-# Generate schema using local provider installation via a temp Terraform config
+# Start provider in dev mode; it prints TF_REATTACH_PROVIDERS JSON to stdout
+echo "Starting provider in dev mode..."
+cd "${REPO_DIR}"
+PYTHONUNBUFFERED=1 uv run terraform-provider-terrible --dev > "${PROVIDER_LOG}" 2>&1 &
+PROVIDER_PID=$!
+
+# Wait for the reattach JSON to appear
+for i in $(seq 1 20); do
+    if grep -q 'TF_REATTACH_PROVIDERS' "${PROVIDER_LOG}" 2>/dev/null; then
+        break
+    fi
+    sleep 0.5
+done
+
+REATTACH_JSON="$(grep -o '{.*}' "${PROVIDER_LOG}" | tail -1)"
+if [[ -z "${REATTACH_JSON}" ]]; then
+    echo "ERROR: provider did not start in time. Log:" >&2
+    cat "${PROVIDER_LOG}" >&2
+    exit 1
+fi
+
+# Generate schema via a temp Terraform config using dev-reattach mode
 TFDIR="${TMPDIR}/tfschema"
 mkdir -p "${TFDIR}"
 
@@ -44,11 +66,11 @@ terraform {
 provider "terrible" {}
 EOF
 
-echo "Initialising Terraform config to get provider schema..."
+echo "Initialising Terraform config..."
 "${TF}" -chdir="${TFDIR}" init -no-color >/dev/null
 
 echo "Exporting provider schema..."
-"${TF}" -chdir="${TFDIR}" providers schema -json > "${TMPDIR}/schema.json"
+TF_REATTACH_PROVIDERS="${REATTACH_JSON}" "${TF}" -chdir="${TFDIR}" providers schema -json > "${TMPDIR}/schema.json"
 
 # Rekey schema from local/terrible/terrible → registry.terraform.io/hashicorp/terrible
 # (tfplugindocs resolves "terrible" → registry.terraform.io/hashicorp/terrible internally)
