@@ -52,6 +52,5 @@ resource "terrible_command" "hello" {
 
 ### Optional
 
-- `state_file` (String)
 - `vault_password` (String, Sensitive) Vault password for decrypting Ansible Vault data.
 - `vault_password_file` (String) Path to a file containing the vault password.

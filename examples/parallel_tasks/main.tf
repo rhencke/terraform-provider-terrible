@@ -15,7 +15,6 @@
 #   }
 #
 # Run with:
-#   tofu apply -var="state_file=/tmp/parallel_state.json"
 
 terraform {
   required_providers {
@@ -26,13 +25,7 @@ terraform {
   }
 }
 
-variable "state_file" {
-  description = "Path for the terrible provider state file"
-  default     = "/tmp/parallel_state.json"
-}
-
 provider "terrible" {
-  state_file = var.state_file
 }
 
 # --- Hosts -------------------------------------------------------------------

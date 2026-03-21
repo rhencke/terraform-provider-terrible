@@ -1,4 +1,3 @@
-import json
 import logging
 from pathlib import Path
 
@@ -17,7 +16,6 @@ log = logging.getLogger(__name__)
 
 class TerribleProvider(Provider):
     def __init__(self):
-        self._state_file = Path("terrible_state.json")
         self._state: dict[str, dict] = {}
         self._task_resources: list | None = None
         self._task_datasources: list | None = None
@@ -27,27 +25,12 @@ class TerribleProvider(Provider):
         if self._task_resources is None:
             self._task_resources, self._task_datasources = discover_task_resources()
 
-    def _load_state(self):
-        if self._state_file.exists():
-            try:
-                self._state = json.loads(self._state_file.read_text())
-            except Exception as exc:
-                log.warning("Could not load state from %s: %s — starting empty", self._state_file, exc)
-                self._state = {}
-
-    def _save_state(self):
-        try:
-            self._state_file.write_text(json.dumps(self._state, indent=2, sort_keys=True))
-        except Exception as exc:
-            log.error("Failed to persist state to %s: %s", self._state_file, exc)
-
     def get_model_prefix(self) -> str:
         return "terrible_"
 
     def get_provider_schema(self, diags: Diagnostics) -> Schema:
         return Schema(
             attributes=[
-                Attribute("state_file", String(), optional=True),
                 Attribute(
                     "vault_password",
                     String(),
@@ -75,16 +58,6 @@ class TerribleProvider(Provider):
             )
 
     def configure_provider(self, diags: Diagnostics, config: dict):
-        sf = config.get("state_file") if config else None
-        if sf:
-            self._state_file = Path(sf)
-        if not self._state_file.parent.exists():
-            try:
-                self._state_file.parent.mkdir(parents=True, exist_ok=True)
-            except Exception as exc:
-                log.warning("Could not create state file directory %s: %s", self._state_file.parent, exc)
-        self._load_state()
-
         # Vault setup
         self._vault_secrets = None
         if config:

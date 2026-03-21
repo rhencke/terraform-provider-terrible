@@ -14,7 +14,6 @@
 #
 # Run with:
 #   tofu init
-#   tofu apply -var="state_file=/tmp/cloud_vm_state.json"
 
 terraform {
   required_providers {
@@ -33,17 +32,11 @@ terraform {
   }
 }
 
-variable "state_file" {
-  description = "Path for the terrible provider state file"
-  default     = "/tmp/cloud_vm_state.json"
-}
-
 provider "aws" {
   region = "us-east-1"
 }
 
 provider "terrible" {
-  state_file = var.state_file
 }
 
 # --- Infrastructure (AWS) ----------------------------------------------------

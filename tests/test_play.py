@@ -39,7 +39,6 @@ def _ctx(klass, changed_fields=None):
 def _provider(state=None):
     prov = MagicMock()
     prov._state = state or {}
-    prov._save_state = MagicMock()
     return prov
 
 
@@ -475,14 +474,12 @@ class TestTerriblePlaybook:
         assert result["result"] is Unknown
 
     # create
-    def test_create_stores_state(self):
+    def test_create_returns_state(self):
         prov = _provider(state={"h1": _host()})
         inst = TerriblePlaybook(prov)
         with patch("terrible_provider.play._run_playbook", return_value={"changed": False}):
             state = inst.create(_ctx(CreateContext), {"host_id": "h1", "playbook": "site.yml"})
         assert "id" in state
-        assert state["id"] in prov._state
-        prov._save_state.assert_called_once()
 
     def test_create_host_not_found_adds_error(self):
         prov = _provider()
@@ -493,17 +490,13 @@ class TestTerriblePlaybook:
         assert ctx.diagnostics.has_errors()
 
     # read
-    def test_read_found(self):
-        stored = {"id": "rid", "host_id": "h1", "playbook": "site.yml"}
-        inst = self._inst(state={"rid": stored})
-        assert inst.read(_ctx(ReadContext), {"id": "rid"}) == stored
-
-    def test_read_not_found(self):
+    def test_read_returns_current(self):
+        current = {"id": "rid", "host_id": "h1", "playbook": "site.yml"}
         inst = self._inst()
-        assert inst.read(_ctx(ReadContext), {"id": "gone"}) is None
+        assert inst.read(_ctx(ReadContext), current) == current
 
     # update
-    def test_update_replaces_state(self):
+    def test_update_returns_state(self):
         prov = _provider(state={"h1": _host(), "rid": {"id": "rid", "host_id": "h1"}})
         inst = TerriblePlaybook(prov)
         with patch("terrible_provider.play._run_playbook", return_value={"changed": True}):
@@ -514,15 +507,12 @@ class TestTerriblePlaybook:
             )
         assert state["id"] == "rid"
         assert state["changed"] is True
-        prov._save_state.assert_called_once()
 
     # delete
-    def test_delete_removes_state(self):
+    def test_delete_is_noop(self):
         prov = _provider(state={"rid": {"id": "rid"}})
         inst = TerriblePlaybook(prov)
-        inst.delete(_ctx(DeleteContext), {"id": "rid"})
-        assert "rid" not in prov._state
-        prov._save_state.assert_called_once()
+        inst.delete(_ctx(DeleteContext), {"id": "rid"})  # should not raise
 
     # import_
     def test_import_found(self):
@@ -610,14 +600,12 @@ class TestTerribleRole:
         assert result["result"] is Unknown
 
     # create
-    def test_create_stores_state(self):
+    def test_create_returns_state(self):
         prov = _provider(state={"h1": _host()})
         inst = TerribleRole(prov)
         with patch("terrible_provider.play._run_role", return_value={"changed": False}):
             state = inst.create(_ctx(CreateContext), {"host_id": "h1", "role": "myrole"})
         assert "id" in state
-        assert state["id"] in prov._state
-        prov._save_state.assert_called_once()
 
     def test_create_host_not_found_adds_error(self):
         prov = _provider()
@@ -628,17 +616,13 @@ class TestTerribleRole:
         assert ctx.diagnostics.has_errors()
 
     # read
-    def test_read_found(self):
-        stored = {"id": "rid", "host_id": "h1", "role": "myrole"}
-        inst = self._inst(state={"rid": stored})
-        assert inst.read(_ctx(ReadContext), {"id": "rid"}) == stored
-
-    def test_read_not_found(self):
+    def test_read_returns_current(self):
+        current = {"id": "rid", "host_id": "h1", "role": "myrole"}
         inst = self._inst()
-        assert inst.read(_ctx(ReadContext), {"id": "gone"}) is None
+        assert inst.read(_ctx(ReadContext), current) == current
 
     # update
-    def test_update_replaces_state(self):
+    def test_update_returns_state(self):
         prov = _provider(state={"h1": _host(), "rid": {"id": "rid", "host_id": "h1"}})
         inst = TerribleRole(prov)
         with patch("terrible_provider.play._run_role", return_value={"changed": True}):
@@ -649,15 +633,12 @@ class TestTerribleRole:
             )
         assert state["id"] == "rid"
         assert state["changed"] is True
-        prov._save_state.assert_called_once()
 
     # delete
-    def test_delete_removes_state(self):
+    def test_delete_is_noop(self):
         prov = _provider(state={"rid": {"id": "rid"}})
         inst = TerribleRole(prov)
-        inst.delete(_ctx(DeleteContext), {"id": "rid"})
-        assert "rid" not in prov._state
-        prov._save_state.assert_called_once()
+        inst.delete(_ctx(DeleteContext), {"id": "rid"})  # should not raise
 
     # import_
     def test_import_found(self):

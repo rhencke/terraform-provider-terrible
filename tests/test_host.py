@@ -15,7 +15,6 @@ def _ctx(klass):
 def _provider():
     prov = MagicMock()
     prov._state = {}
-    prov._save_state = MagicMock()
     return prov
 
 
@@ -116,19 +115,20 @@ class TestTerribleHost:
         inst = TerribleHost(prov)
         state = inst.create(_ctx(CreateContext), {"host": "10.0.0.1"})
         assert state["id"] in prov._state
-        prov._save_state.assert_called_once()
 
-    def test_read_returns_stored_state(self):
+    def test_read_returns_current(self):
         prov = _provider()
-        prov._state["abc"] = {"id": "abc", "host": "10.0.0.1"}
+        current = {"id": "abc", "host": "10.0.0.1"}
         inst = TerribleHost(prov)
-        result = inst.read(_ctx(ReadContext), {"id": "abc"})
-        assert result == {"id": "abc", "host": "10.0.0.1"}
+        result = inst.read(_ctx(ReadContext), current)
+        assert result == current
 
-    def test_read_returns_none_when_missing(self):
+    def test_read_populates_state(self):
         prov = _provider()
+        current = {"id": "abc", "host": "10.0.0.1"}
         inst = TerribleHost(prov)
-        assert inst.read(_ctx(ReadContext), {"id": "nonexistent"}) is None
+        inst.read(_ctx(ReadContext), current)
+        assert prov._state["abc"] == current
 
     def test_update_replaces_state(self):
         prov = _provider()
@@ -138,7 +138,6 @@ class TestTerribleHost:
         assert result["host"] == "new"
         assert result["id"] == "abc"
         assert prov._state["abc"]["host"] == "new"
-        prov._save_state.assert_called_once()
 
     def test_delete_removes_from_state(self):
         prov = _provider()
@@ -146,7 +145,6 @@ class TestTerribleHost:
         inst = TerribleHost(prov)
         inst.delete(_ctx(DeleteContext), {"id": "abc"})
         assert "abc" not in prov._state
-        prov._save_state.assert_called_once()
 
     def test_delete_missing_id_is_safe(self):
         prov = _provider()

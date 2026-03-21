@@ -11,10 +11,7 @@ variable "ssh_host" { type = string }
 variable "ssh_port" { type = number; default = 22 }
 variable "ssh_user" { type = string; default = "alpine" }
 variable "ssh_key_path" { type = string; sensitive = true }
-variable "state_file" { type = string }
-
 provider "terrible" {
-  state_file = var.state_file
 }
 
 resource "terrible_host" "vm" {
