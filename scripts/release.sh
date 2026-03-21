@@ -52,14 +52,11 @@ echo "Running test suite..."
 uv run pytest -q
 
 # Create and push the annotated tag
+# The release workflow's publish job creates the GitHub release and uploads assets.
+# Do NOT create the release here — creating it before assets are uploaded makes it
+# immutable and the subsequent `gh release upload` call fails with HTTP 422.
 git tag -a "${TAG}" -m "${TAG} — ${TITLE}"$'\n\n'"${NOTES}"
 git push origin "${TAG}"
-
-# Create the GitHub release (placeholder — assets will be attached by the workflow)
-gh release create "${TAG}" \
-    --title "${TAG} — ${TITLE}" \
-    --notes "${NOTES}" \
-    --draft=false
 
 echo ""
 echo "Tag pushed. Waiting for release workflow..."
