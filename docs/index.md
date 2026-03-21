@@ -15,7 +15,7 @@ Terraform state — no Ansible inventory required.
 Resource types:
 
 - `terrible_host` — target host (SSH, WinRM, local, Docker, etc.)
-- `terrible_ansible_builtin_*` — one resource per Ansible module, discovered dynamically
+- `terrible_*` — one resource per Ansible module, discovered dynamically (e.g. `terrible_ping`, `terrible_command`)
 - `terrible_vault` (data source) — decrypts Ansible Vault ciphertext
 
 > **Note:** `terrible_playbook` and `terrible_role` are deprecated and will be
@@ -41,7 +41,7 @@ resource "terrible_host" "localhost" {
   connection = "local"
 }
 
-resource "terrible_ansible_builtin_command" "hello" {
+resource "terrible_command" "hello" {
   host_id = terrible_host.localhost.id
   argv    = ["echo", "hello from Ansible"]
 }
