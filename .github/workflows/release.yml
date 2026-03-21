@@ -240,6 +240,8 @@ jobs:
       contents: write
 
     steps:
+      - uses: actions/checkout@v4
+
       - name: Publish draft release
         run: gh release edit "${TAG_NAME}" --draft=false
         env:
