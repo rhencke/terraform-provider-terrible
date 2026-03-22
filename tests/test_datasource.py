@@ -234,10 +234,13 @@ class TestSuccessfulRead:
         inst = DSClass(_make_provider())
         ctx, diags = _make_ctx()
 
-        with patch(
-            "terrible_provider.task_datasource._run_module",
-            return_value={"changed": False, "ping": "pong", "undocumented": "val"},
-        ), patch("terrible_provider.task_datasource.log") as mock_log:
+        with (
+            patch(
+                "terrible_provider.task_datasource._run_module",
+                return_value={"changed": False, "ping": "pong", "undocumented": "val"},
+            ),
+            patch("terrible_provider.task_datasource.log") as mock_log,
+        ):
             inst.read(ctx, {"host_id": "host-1"})
 
         mock_log.warning.assert_called_once()
@@ -260,7 +263,5 @@ class TestSuccessfulRead:
         assert kwargs.get("check_only") is True
 
     def test_get_schema_returns_schema(self):
-        DSClass = _make_ds_class(
-            [Attribute("host_id", String(), required=True)]
-        )
+        DSClass = _make_ds_class([Attribute("host_id", String(), required=True)])
         assert DSClass.get_schema() is DSClass._schema

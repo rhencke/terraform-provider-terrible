@@ -74,7 +74,8 @@ class TerribleTaskDataSource(DataSource):
             for name in self.__class__._return_attr_names
         }
         extra = {
-            k for k in result
+            k
+            for k in result
             if k not in self.__class__._return_attr_names
             and k not in _ANSIBLE_INTERNAL
             and not k.startswith("_ansible_")
