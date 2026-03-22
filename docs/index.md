@@ -1,27 +1,36 @@
 ---
 page_title: "terrible Provider"
 description: |-
-  The terrible provider exposes Ansible tasks as Terraform-managed resources,
-  letting you run Ansible modules and playbooks directly from Terraform without
-  maintaining a separate inventory.
+  The terrible provider exposes individual Ansible modules as stateful
+  Terraform-managed resources — one resource type per module, discovered
+  dynamically from your installed Ansible collections.
 ---
 
 # terrible Provider
 
-The **terrible** provider bridges Terraform and Ansible: define target hosts and
-Ansible task/playbook executions as Terraform resources and keep everything in
-Terraform state — no Ansible inventory required.
+The **terrible** provider exposes individual Ansible modules as first-class
+Terraform resources with full state management. Each installed Ansible module
+becomes a `terrible_<module>` resource (e.g. `terrible_ping`,
+`terrible_command`, `terrible_file`), letting you treat Ansible tasks as
+infrastructure primitives without maintaining a separate inventory.
 
-Resource types:
+## What terrible is for
 
-- `terrible_host` — target host (SSH, WinRM, local, Docker, etc.)
-- `terrible_*` — one resource per Ansible module, discovered dynamically (e.g. `terrible_ping`, `terrible_command`)
-- `terrible_vault` (data source) — decrypts Ansible Vault ciphertext
+- **Individual Ansible task resources** — run a specific module against a host,
+  track its output in Terraform state, and detect drift on the next plan
+- **Host connection management** — `terrible_host` defines SSH, WinRM, local,
+  and Docker connection targets inline in your Terraform config
 
-> **Note:** `terrible_playbook` and `terrible_role` are deprecated and will be
-> removed in a future release. For playbook and role execution, use the
-> [ansible/ansible](https://registry.terraform.io/providers/ansible/ansible/latest/docs)
-> provider instead.
+## What terrible is NOT for
+
+For the use cases below, use the dedicated providers instead:
+
+| Use case | Recommended provider |
+|----------|---------------------|
+| Run Ansible playbooks or roles | [ansible/ansible](https://registry.terraform.io/providers/ansible/ansible/latest) — `ansible_playbook` resource |
+| Manage Ansible inventory and host groups | [ansible/ansible](https://registry.terraform.io/providers/ansible/ansible/latest) — `ansible_host`, `ansible_group` |
+| Decrypt Ansible Vault secrets | [ansible/ansible](https://registry.terraform.io/providers/ansible/ansible/latest) or [MeilleursAgents/terraform-provider-ansiblevault](https://github.com/MeilleursAgents/terraform-provider-ansiblevault) |
+| Trigger Ansible Automation Platform jobs | [ansible/aap](https://registry.terraform.io/providers/ansible/aap/latest) |
 
 ## Example Usage
 
@@ -29,7 +38,7 @@ Resource types:
 terraform {
   required_providers {
     terrible = {
-      source  = "rhencke/terrible"
+      source = "rhencke/terrible"
     }
   }
 }
@@ -44,6 +53,10 @@ resource "terrible_host" "localhost" {
 resource "terrible_command" "hello" {
   host_id = terrible_host.localhost.id
   argv    = ["echo", "hello from Ansible"]
+}
+
+output "stdout" {
+  value = terrible_command.hello.stdout
 }
 ```
 
