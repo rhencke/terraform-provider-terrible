@@ -162,7 +162,6 @@ def _run_module(
     async_seconds: int | None = None,
     poll_interval: int | None = None,
     delegate_host_state: dict | None = None,
-    vault_secrets: list | None = None,
 ) -> dict:
     """Run an Ansible module in-process via TaskQueueManager."""
     _ensure_ansible_initialized()
@@ -199,8 +198,6 @@ def _run_module(
         )
 
         loader = DataLoader()
-        if vault_secrets:
-            loader.set_vault_secrets(vault_secrets)
         inv = InventoryManager(loader=loader, sources="target,")
         hobj = inv.get_host("target")
         _setup_host_inventory(hobj, host_state)
@@ -259,7 +256,7 @@ def _run_module(
                 tqm.cleanup()
             loader.cleanup_all_tmp_files()
             if not _in_main:
-                _signal.signal = _real_signal  # type: ignore[method-assign,unused-ignore]
+                _signal.signal = _real_signal  # type: ignore[method-assign]
             _ansible_context.CLIARGS = orig_cliargs
 
     return cb.result or {"failed": True, "msg": "No result captured from Ansible"}
@@ -418,7 +415,6 @@ class TerribleTaskBase(Resource):
             async_seconds=planned.get("async_seconds"),
             poll_interval=planned.get("poll_interval"),
             delegate_host_state=delegate_host,
-            vault_secrets=self._prov._vault_secrets,
         )
         changed = bool(result.get("changed", False))
         if (result.get("failed") or result.get("unreachable")) and not planned.get("ignore_errors"):
@@ -463,7 +459,6 @@ class TerribleTaskBase(Resource):
         kwargs: dict = dict(
             check_only=True,
             timeout=current.get("timeout"),
-            vault_secrets=self._prov._vault_secrets,
         )
         patch_factory = _CHECK_MODE_PATCHES.get(fqcn)
         if patch_factory:
