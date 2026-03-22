@@ -169,7 +169,10 @@ def _tf_type_for(ansible_type: str):
     return _TYPE_MAP.get(str(ansible_type).lower(), String())
 
 
-_RST_INLINE = re.compile(r"([OCEVMP])\(([^)]*)\)|B\(([^)]*)\)|I\(([^)]*)\)|U\(([^)]*)\)|L\(([^,)]*),([^)]*)\)|R\(([^,)]*),([^)]*)\)")
+_RST_INLINE = re.compile(
+    r"([OCEVMP])\(([^)]*)\)|B\(([^)]*)\)|I\(([^)]*)\)|U\(([^)]*)\)"
+    r"|L\(([^,)]*),([^)]*)\)|R\(([^,)]*),([^)]*)\)"
+)
 
 
 def _render_rst(text: str) -> str:
