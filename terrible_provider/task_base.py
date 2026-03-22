@@ -336,11 +336,11 @@ def _force_check_mode_support():
         kwargs["supports_check_mode"] = True
         original_init(self, *args, **kwargs)
 
-    AnsibleModule.__init__ = _patched_init
+    AnsibleModule.__init__ = _patched_init  # type: ignore[method-assign]
     try:
         yield
     finally:
-        AnsibleModule.__init__ = original_init
+        AnsibleModule.__init__ = original_init  # type: ignore[method-assign]
 
 
 # ---------------------------------------------------------------------------
