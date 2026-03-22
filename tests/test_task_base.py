@@ -1,5 +1,6 @@
 """Unit tests for TerribleTaskBase resource methods."""
 
+import contextlib
 import json
 import sys
 import threading
@@ -18,9 +19,11 @@ from tf.utils import Diagnostics
 
 from terrible_provider.discovery import _coerce_number, make_task_class
 from terrible_provider.task_base import (
+    _CHECK_MODE_PATCHES,
     _build_args_str,
     _ensure_ansible_initialized,
     _ensure_collection_finder,
+    _force_check_mode_support,
     _make_callback,
     _run_module,
     _setup_host_inventory,
@@ -254,15 +257,19 @@ class TestCRUD:
 
 
 class TestRead:
-    def test_read_no_check_mode_returns_current(self):
+    def test_read_skipped_returns_current(self):
+        """Modules that return skipped=True in check mode fall back to stored state.
+        This covers check_mode=none (AnsibleModule auto-skips) and partial modules
+        without creates/removes."""
         klass = _make_class(check_mode="none")
         current = {"id": "rid", "host_id": "h1", "changed": False}
         prov = _provider(state={"h1": _host()})
         inst = klass(prov)
-        result = inst.read(_ctx(ReadContext), current)
+        with patch("terrible_provider.task_base._run_module", return_value={"skipped": True}):
+            result = inst.read(_ctx(ReadContext), current)
         assert result == current
 
-    def test_read_check_mode_no_drift_returns_current(self):
+    def test_read_no_drift_returns_current(self):
         klass = _make_class(check_mode="full")
         current = {"id": "rid", "host_id": "h1", "changed": False}
         prov = _provider(state={"h1": _host()})
@@ -271,7 +278,7 @@ class TestRead:
             result = inst.read(_ctx(ReadContext), current)
         assert result == current
 
-    def test_read_check_mode_drift_clears_outputs(self):
+    def test_read_drift_clears_outputs(self):
         klass = _make_class(returns={"rc": {"type": "int"}}, check_mode="full")
         current = {"id": "rid", "host_id": "h1", "rc": 0, "changed": False}
         prov = _provider(state={"h1": _host()})
@@ -281,7 +288,18 @@ class TestRead:
         assert result["rc"] is None
         assert result["changed"] is None
 
-    def test_read_check_mode_failed_returns_current_with_warning(self):
+    def test_read_partial_check_mode_detects_drift(self):
+        """Partial-support modules (e.g. command with creates=) report drift via changed=True."""
+        klass = _make_class(returns={"rc": {"type": "int"}}, check_mode="partial")
+        current = {"id": "rid", "host_id": "h1", "rc": 0, "changed": False}
+        prov = _provider(state={"h1": _host()})
+        inst = klass(prov)
+        with patch("terrible_provider.task_base._run_module", return_value={"changed": True}):
+            result = inst.read(_ctx(ReadContext), current)
+        assert result["rc"] is None
+        assert result["changed"] is None
+
+    def test_read_failed_returns_current_with_warning(self):
         klass = _make_class(check_mode="full")
         current = {"id": "rid", "host_id": "h1", "changed": False}
         prov = _provider(state={"h1": _host()})
@@ -290,22 +308,90 @@ class TestRead:
             result = inst.read(_ctx(ReadContext), current)
         assert result == current
 
-    def test_read_check_mode_host_not_in_state_returns_current(self):
-        klass = _make_class(check_mode="full")
+    def test_read_host_not_in_state_returns_current(self):
+        klass = _make_class(check_mode="none")
         current = {"id": "rid", "host_id": "missing", "changed": False}
         prov = _provider()  # host NOT in state
         inst = klass(prov)
         result = inst.read(_ctx(ReadContext), current)
         assert result == current
 
-    def test_read_check_mode_host_resolves_none_returns_current(self):
+    def test_read_host_resolves_none_returns_current(self):
         # host_id key exists in _state but value is None — _resolve_host returns None
-        klass = _make_class(check_mode="full")
-        current = {"id": "rid", "host_id": "h1", "result": {}, "changed": False}
+        klass = _make_class(check_mode="none")
+        current = {"id": "rid", "host_id": "h1", "changed": False}
         prov = _provider(state={"h1": None})
         inst = klass(prov)
         result = inst.read(_ctx(ReadContext), current)
         assert result == current
+
+    def test_read_check_mode_patch_applied(self):
+        """_CHECK_MODE_PATCHES entries are applied around _execute_check."""
+        klass = _make_class(check_mode="none")
+        klass._module_name = "test.patched_module"
+        current = {"id": "rid", "host_id": "h1", "changed": False}
+        prov = _provider(state={"h1": _host()})
+        inst = klass(prov)
+
+        patch_entered = []
+
+        @contextlib.contextmanager
+        def fake_patch():
+            patch_entered.append(True)
+            yield
+
+        try:
+            _CHECK_MODE_PATCHES["test.patched_module"] = fake_patch
+            with patch("terrible_provider.task_base._run_module", return_value={"skipped": True}):
+                inst.read(_ctx(ReadContext), current)
+        finally:
+            _CHECK_MODE_PATCHES.pop("test.patched_module", None)
+
+        assert patch_entered, "patch context manager was not entered"
+
+
+# ---------------------------------------------------------------------------
+# _force_check_mode_support
+# ---------------------------------------------------------------------------
+
+
+class TestForceCheckModeSupport:
+    def test_patches_and_restores_ansible_module_init(self):
+        """_force_check_mode_support temporarily forces supports_check_mode=True."""
+        from ansible.module_utils.basic import AnsibleModule
+
+        original = AnsibleModule.__init__
+        recorded = []
+
+        def recording_init(self, *args, **kwargs):
+            recorded.append(kwargs.get("supports_check_mode"))
+            # don't actually call original — AnsibleModule init has complex deps
+            self.supports_check_mode = kwargs.get("supports_check_mode", False)
+
+        AnsibleModule.__init__ = recording_init
+        try:
+            with _force_check_mode_support():
+                obj = object.__new__(AnsibleModule)
+                obj.__init__(supports_check_mode=False)
+            assert recorded == [True], "supports_check_mode was not forced to True"
+            # after context exit, original is restored
+            assert AnsibleModule.__init__ is recording_init
+        finally:
+            AnsibleModule.__init__ = original
+
+    def test_restores_on_exception(self):
+        """_force_check_mode_support restores __init__ even if the body raises."""
+        from ansible.module_utils.basic import AnsibleModule
+
+        original = AnsibleModule.__init__
+        try:
+            with contextlib.suppress(RuntimeError), _force_check_mode_support():
+                assert AnsibleModule.__init__ is not original  # patch applied
+                raise RuntimeError("test")
+            # after exception, finally block in helper restores original
+            assert AnsibleModule.__init__ is original
+        finally:
+            AnsibleModule.__init__ = original  # cleanup
 
 
 # ---------------------------------------------------------------------------
