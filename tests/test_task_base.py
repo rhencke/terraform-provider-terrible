@@ -203,9 +203,11 @@ class TestCRUD:
         prov = _provider(state={"h1": _host()})
         inst = klass(prov)
         result = {"changed": False, "rc": 0, "undocumented_key": "surprise"}
-        with patch("terrible_provider.task_base._run_module", return_value=result):
-            with patch("terrible_provider.task_base.log") as mock_log:
-                inst.create(_ctx(CreateContext), {"host_id": "h1"})
+        with (
+            patch("terrible_provider.task_base._run_module", return_value=result),
+            patch("terrible_provider.task_base.log") as mock_log,
+        ):
+            inst.create(_ctx(CreateContext), {"host_id": "h1"})
         mock_log.warning.assert_called_once()
         assert "undocumented_key" in str(mock_log.warning.call_args)
 

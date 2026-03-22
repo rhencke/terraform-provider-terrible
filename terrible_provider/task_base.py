@@ -6,10 +6,10 @@ import signal as _signal
 import threading
 import uuid
 
-log = logging.getLogger(__name__)
-
 from tf.iface import CreateContext, DeleteContext, ImportContext, PlanContext, ReadContext, Resource, UpdateContext
 from tf.types import Unknown
+
+log = logging.getLogger(__name__)
 
 _MODULE_TIMEOUT = 300  # seconds before an Ansible run is considered hung
 

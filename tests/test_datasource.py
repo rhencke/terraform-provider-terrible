@@ -237,9 +237,8 @@ class TestSuccessfulRead:
         with patch(
             "terrible_provider.task_datasource._run_module",
             return_value={"changed": False, "ping": "pong", "undocumented": "val"},
-        ):
-            with patch("terrible_provider.task_datasource.log") as mock_log:
-                inst.read(ctx, {"host_id": "host-1"})
+        ), patch("terrible_provider.task_datasource.log") as mock_log:
+            inst.read(ctx, {"host_id": "host-1"})
 
         mock_log.warning.assert_called_once()
         assert "undocumented" in str(mock_log.warning.call_args)
