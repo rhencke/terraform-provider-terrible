@@ -1,5 +1,6 @@
 """Base class for dynamically-generated Ansible module resources."""
 
+import contextlib
 import json
 import logging
 import signal as _signal
@@ -307,6 +308,42 @@ def _build_args_str(state: dict) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Check-mode monkey-patch registry
+# ---------------------------------------------------------------------------
+
+# Maps FQCN → zero-arg callable returning a context manager.
+# The context manager is applied around _run_module during _execute_check() to
+# allow drift detection for modules that declare supports_check_mode=False.
+# Populate this dict for modules known to be safe in check mode despite their
+# declared support level.
+_CHECK_MODE_PATCHES: dict = {}
+
+
+@contextlib.contextmanager
+def _force_check_mode_support():
+    """Temporarily patch AnsibleModule to bypass the supports_check_mode=False skip.
+
+    Use this as a value in _CHECK_MODE_PATCHES for modules known to be safe in
+    check mode even though they declare supports_check_mode=False.  The patch
+    is applied only for the duration of a single _execute_check() call and is
+    always reverted, even if an exception occurs.
+    """
+    from ansible.module_utils.basic import AnsibleModule
+
+    original_init = AnsibleModule.__init__
+
+    def _patched_init(self, *args, **kwargs):
+        kwargs["supports_check_mode"] = True
+        original_init(self, *args, **kwargs)
+
+    AnsibleModule.__init__ = _patched_init
+    try:
+        yield
+    finally:
+        AnsibleModule.__init__ = original_init
+
+
+# ---------------------------------------------------------------------------
 # Resource base class
 # ---------------------------------------------------------------------------
 
@@ -413,26 +450,34 @@ class TerribleTaskBase(Resource):
         return {**planned, **return_attrs, "id": new_id, "changed": changed}
 
     def _execute_check(self, diags, current: dict) -> dict | None:
-        """Run module in check+diff mode against stored state. Returns raw result or None on host error."""
+        """Run module in check+diff mode against stored state. Returns raw result or None on host error.
+
+        If a patch is registered in _CHECK_MODE_PATCHES for this module's FQCN,
+        the patch context manager is applied around the _run_module call to allow
+        drift detection for modules that otherwise declare supports_check_mode=False.
+        """
         host = self._resolve_host(current["host_id"], diags)
         if host is None:
             return None
-        return _run_module(
-            host,
-            self.__class__._module_name,
-            _build_args_str(current),
+        fqcn = self.__class__._module_name
+        kwargs: dict = dict(
             check_only=True,
             timeout=current.get("timeout"),
             vault_secrets=self._prov._vault_secrets,
         )
+        patch_factory = _CHECK_MODE_PATCHES.get(fqcn)
+        if patch_factory:
+            with patch_factory():
+                return _run_module(host, fqcn, _build_args_str(current), **kwargs)
+        return _run_module(host, fqcn, _build_args_str(current), **kwargs)
 
     def read(self, ctx: ReadContext, current: dict) -> dict | None:
-        if self.__class__._check_mode_support != "full":
-            return current  # input-hash idempotency only
-
-        # For full check_mode, execute against the live host. If the host isn't
-        # in the in-memory state yet (ordering not guaranteed during refresh),
-        # fall back to the stored state — Terraform will reconcile next apply.
+        # Attempt check mode for all modules. AnsibleModule immediately exits
+        # with skipped=True for modules that declare supports_check_mode=False,
+        # so this is always safe — worst case is skipped=True (no drift detectable).
+        # If the host isn't in the in-memory state yet (ordering not guaranteed
+        # during refresh), fall back to stored state — Terraform will reconcile
+        # on next apply.
         if current.get("host_id") not in self._prov._state:
             return current
 
@@ -446,6 +491,9 @@ class TerribleTaskBase(Resource):
                 result.get("msg", "unknown error"),
             )
             return current
+
+        if result.get("skipped"):
+            return current  # check mode not actionable — input-hash idempotency only
 
         if not result.get("changed", False):
             return current  # up to date, no drift
