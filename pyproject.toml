@@ -40,7 +40,6 @@ testpaths = ["tests"]
 omit = [
     "*/terrible_provider/cli.py",
     "*/terrible_provider/install.py",
-    "*/terrible_provider/gen/*.py",
 ]
 
 [tool.coverage.report]
@@ -52,7 +51,6 @@ exclude_lines = [
 [tool.ruff]
 target-version = "py313"
 line-length = 120
-exclude = ["terrible_provider/gen/*.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "B", "I", "UP", "SIM"]
@@ -66,5 +64,3 @@ tf = { path = "/workspaces/tf" }
 # strict mode — all checks enabled
 
 [tool.ty.src]
-# Generated protobuf bindings cannot be type-checked (dynamic descriptors).
-exclude = ["terrible_provider/gen"]
