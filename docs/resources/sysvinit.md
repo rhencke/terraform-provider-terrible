@@ -28,18 +28,18 @@ description: |-
 - `daemonize` (Boolean) Have the module daemonize as the service itself might not do so properly. This is useful with badly written init scripts or daemons, which commonly manifests as the task hanging as it is still holding the tty or the service dying when the task is over as the connection closes the session.
 - `delegate_to_id` (String) ID of another terrible_host to delegate execution to.
 - `enabled` (Boolean) Whether the service should start on boot. At least one of `state` and `enabled` are required.
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
 - `ignore_errors` (Boolean) When true, a failed task does not raise a Terraform error.
 - `pattern` (String) A substring to look for as would be found in the output of the *ps* command as a stand-in for a status result. If the string is found, the service will be assumed to be running. This option is mainly for use with init scripts that don't support the `status` option.
 - `poll_interval` (Number) Polling interval in seconds when async_seconds > 0. Defaults to 15.
 - `runlevels` (String) The runlevels this script should be enabled/disabled from. Use this to override the defaults set by the package or init script itself.
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
 - `sleep` (Number) If the service is being `restarted` or `reloaded` then sleep this many seconds between the stop and start command. This helps to workaround badly behaving services.
 - `state` (String) `started`/`stopped` are idempotent actions that will not run commands unless necessary. Not all init scripts support `restarted` nor `reloaded` natively, so these will both trigger a stop and start as needed.
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.
-- `triggers` (String) Arbitrary map of values; any change triggers task re-execution
+- `triggers` (Map of String) Arbitrary map of string values; any change triggers task re-execution
 
 ### Read-Only
 

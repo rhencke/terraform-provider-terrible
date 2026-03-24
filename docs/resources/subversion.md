@@ -27,7 +27,7 @@ description: |-
 - `checkout` (Boolean) If `false`, do not check out the repository if it does not exist locally.
 - `delegate_to_id` (String) ID of another terrible_host to delegate execution to.
 - `dest` (String) Absolute path where the repository should be deployed. The destination directory must be specified unless `checkout=no`, `update=no`, and `export=no`.
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `executable` (String) Path to svn executable to use. If not supplied, the normal mechanism for resolving binary paths will be used.
 - `export` (Boolean) If `true`, do export instead of checkout/update.
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
@@ -37,11 +37,11 @@ description: |-
 - `password` (String) `--password` parameter passed to svn when svn is less than version 1.10.0. This is not secure and the password will be leaked to argv. `--password-from-stdin` parameter when svn is greater or equal to version 1.10.0.
 - `poll_interval` (Number) Polling interval in seconds when async_seconds > 0. Defaults to 15.
 - `revision` (String) Specific revision to checkout.
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
 - `switch` (Boolean) If `false`, do not call svn switch before update.
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.
-- `triggers` (String) Arbitrary map of values; any change triggers task re-execution
+- `triggers` (Map of String) Arbitrary map of string values; any change triggers task re-execution
 - `update` (Boolean) If `false`, do not retrieve new revisions from the origin repository.
 - `username` (String) `--username` parameter passed to svn.
 - `validate_certs` (Boolean) If `false`, passes the `--trust-server-cert` flag to svn. If `true`, does not pass the flag.

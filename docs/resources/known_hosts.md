@@ -25,18 +25,18 @@ description: |-
 - `async_seconds` (Number) Run the task asynchronously, timing out after this many seconds. 0 = synchronous (default).
 - `changed_when` (String) Jinja2 expression that overrides when the task is considered changed (e.g. 'false').
 - `delegate_to_id` (String) ID of another terrible_host to delegate execution to.
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
 - `hash_host` (Boolean) Hash the hostname in the known_hosts file.
 - `ignore_errors` (Boolean) When true, a failed task does not raise a Terraform error.
 - `key` (String) The SSH public host key, as a string. Required if `state=present`, optional when `state=absent`, in which case all keys for the host are removed. The key must be in the right format for SSH (see sshd(8), section "SSH_KNOWN_HOSTS FILE FORMAT"). Specifically, the key should not match the format that is found in an SSH pubkey file, but should rather have the hostname prepended to a line that includes the pubkey, the same way that it would appear in the known_hosts file. The value prepended to the line must also match the value of the name parameter. Should be of format `<hostname[,IP]> ssh-rsa <pubkey>`. For custom SSH port, `key` needs to specify port as well. See example section.
 - `path` (String) The known_hosts file to edit. The known_hosts file will be created if needed. The rest of the path must exist prior to running the module.
 - `poll_interval` (Number) Polling interval in seconds when async_seconds > 0. Defaults to 15.
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
 - `state` (String) `present` to add host keys. `absent` to remove host keys.
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.
-- `triggers` (String) Arbitrary map of values; any change triggers task re-execution
+- `triggers` (Map of String) Arbitrary map of string values; any change triggers task re-execution
 
 ### Read-Only
 

@@ -23,10 +23,10 @@ description: |-
 ### Optional
 
 - `delegate_to_id` (String) ID of another terrible_host to delegate execution to.
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `executable` (String) Change the shell used to execute the command. Should be an absolute path to the executable. When using privilege escalation (`become`) a default shell will be assigned if one is not provided as privilege escalation requires a shell.
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
 - `ignore_errors` (Boolean) When true, a failed task does not raise a Terraform error.
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.

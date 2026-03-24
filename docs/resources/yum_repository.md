@@ -35,7 +35,7 @@ description: |-
 - `description` (String) A human-readable string describing the repository. This option corresponds to the `name` property in the repo file. This parameter is only required if `state=present`.
 - `enabled` (Boolean) This tells yum whether or not use this repository. Yum default value is `true`.
 - `enablegroups` (Boolean) Determines whether yum will allow the use of package groups for this repository. Yum default value is `true`.
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `exclude` (String) List of packages to exclude from updates or installs. This should be a space separated list. Shell globs using wildcards (for example `*` and `?`) are allowed. The list can also be a regular YAML array. `excludepkgs` alias was added in ansible-core 2.18.
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
 - `failovermethod` (String) `roundrobin` randomly selects a URL out of the list of URLs to start with and proceeds through each of them as it encounters a failure contacting the host. `priority` starts from the first `baseurl` listed and reads through them sequentially.
@@ -67,17 +67,17 @@ description: |-
 - `retries` (String) Set the number of times any attempt to retrieve a file should retry before returning an error. Setting this to `0` makes yum try forever.
 - `s3_enabled` (Boolean) Enables support for S3 repositories. This option only works if the YUM S3 plugin is installed.
 - `skip_if_unavailable` (Boolean) If set to `true` yum will continue running if this repository cannot be contacted for any reason. This should be set carefully as all repos are consulted for any given command.
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
 - `ssl_check_cert_permissions` (Boolean) Whether yum should check the permissions on the paths for the certificates on the repository (both remote and local). If we can't read any of the files then yum will force `skip_if_unavailable` to be `true`. This is most useful for non-root processes which use yum on repos that have client cert files which are readable only by root. This parameter is deprecated as it has no effect with dnf as an underlying package manager and will be removed in ansible-core 2.22.
 - `sslcacert` (String) Path to the directory containing the databases of the certificate authorities yum should use to verify SSL certificates.
 - `sslclientcert` (String) Path to the SSL client certificate yum should use to connect to repos/remote sites.
 - `sslclientkey` (String) Path to the SSL client key yum should use to connect to repos/remote sites.
 - `sslverify` (Boolean) Defines whether yum should verify SSL certificates/hosts at all.
 - `state` (String) State of the repo file.
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `throttle` (String) Enable bandwidth throttling for downloads. This option can be expressed as a absolute data rate in bytes/sec. An SI prefix (k, M or G) may be appended to the bandwidth value.
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.
-- `triggers` (String) Arbitrary map of values; any change triggers task re-execution
+- `triggers` (Map of String) Arbitrary map of string values; any change triggers task re-execution
 - `ui_repoid_vars` (String) When a repository id is displayed, append these yum variables to the string if they are used in the `baseurl`/etc. Variables are appended in the order listed (and found). This parameter is deprecated as it has no effect with dnf as an underlying package manager and will be removed in ansible-core 2.22.
 - `username` (String) Username to use for basic authentication to a repo or really any url.
 

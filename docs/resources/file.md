@@ -27,7 +27,7 @@ description: |-
 - `async_seconds` (Number) Run the task asynchronously, timing out after this many seconds. 0 = synchronous (default).
 - `changed_when` (String) Jinja2 expression that overrides when the task is considered changed (e.g. 'false').
 - `delegate_to_id` (String) ID of another terrible_host to delegate execution to.
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
 - `follow` (Boolean) This flag indicates that filesystem links, if they exist, should be followed. `follow=yes` and `state=link` can modify `src` when combined with parameters such as `mode`. Previous to Ansible 2.5, this was `false` by default. While creating a symlink with a non-existent destination, set `follow=false` to avoid a warning message related to permission issues. The warning message is added to notify the user that we can not set permissions to the non-existent destination.
 - `force` (Boolean) Force the creation of the links in two cases: if the link type is symbolic and the source file does not exist (but will appear later); the destination exists and is a file (so, we need to unlink the `path` file and create a link to the `src` file in place of it).
@@ -36,12 +36,12 @@ description: |-
 - `modification_time_format` (String) When used with `modification_time`, indicates the time format that must be used. Based on default Python format (see time.strftime doc).
 - `poll_interval` (Number) Polling interval in seconds when async_seconds > 0. Defaults to 15.
 - `recurse` (Boolean) Recursively set the specified file attributes on directory contents. This applies only when `state` is set to `directory`.
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
 - `src` (String) Path of the file to link to. This applies only to `state=link` and `state=hard`. For `state=link`, this will also accept a non-existing path. Relative paths are relative to the file being created (`path`) which is how the Unix command `ln -s SRC DEST` treats relative paths.
 - `state` (String) If `absent`, directories will be recursively deleted, and files or symlinks will be unlinked. In the case of a directory, if `diff` is declared, you will see the files and folders deleted listed under `path_contents`. Note that `absent` will not cause `ansible.builtin.file` to fail if the `path` does not exist as the state did not change. If `directory`, all intermediate subdirectories will be created if they do not exist. Since Ansible 1.7 they will be created with the supplied permissions. If `file`, with no other options, returns the current state of `path`. If `file`, even with other options (such as `mode`), the file will be modified if it exists but will NOT be created if it does not exist. Set to `touch` or use the `ansible.builtin.copy` or `ansible.builtin.template` module if you want to create the file if it does not exist. If `hard`, the hard link will be created or changed. If `link`, the symbolic link will be created or changed. If `touch` (new in 1.4), an empty file will be created if the file does not exist, while an existing file or directory will receive updated file access and modification times (similar to the way `touch` works from the command line). Default is the current state of the file if it exists, `directory` if `recurse=yes`, or `file` otherwise.
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.
-- `triggers` (String) Arbitrary map of values; any change triggers task re-execution
+- `triggers` (Map of String) Arbitrary map of string values; any change triggers task re-execution
 
 ### Read-Only
 

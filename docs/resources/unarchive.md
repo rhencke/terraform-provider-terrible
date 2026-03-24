@@ -28,7 +28,7 @@ description: |-
 - `copy` (Boolean) If true, the file is copied from local controller to the managed (remote) node, otherwise, the plugin will look for src archive on the managed machine. This option has been deprecated in favor of `remote_src`. This option is mutually exclusive with `remote_src`.
 - `creates` (String) If the specified absolute path (file or directory) already exists, this step will **not** be run. The specified absolute path (file or directory) must be below the base path given with `dest`.
 - `delegate_to_id` (String) ID of another terrible_host to delegate execution to.
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `exclude` (String) List the directory and file entries that you would like to exclude from the unarchive action. Mutually exclusive with `include`.
 - `extra_opts` (String) Specify additional options by passing in an array. Each space-separated command-line option should be a new element of the array. See examples. Command-line options with multiple elements must use multiple lines in the array, one for each element.
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
@@ -39,10 +39,10 @@ description: |-
 - `list_files` (Boolean) If set to True, return the list of files that are contained in the tarball.
 - `poll_interval` (Number) Polling interval in seconds when async_seconds > 0. Defaults to 15.
 - `remote_src` (Boolean) Set to `true` to indicate the archived file is already on the remote system and not local to the Ansible controller. This option is mutually exclusive with `copy`.
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.
-- `triggers` (String) Arbitrary map of values; any change triggers task re-execution
+- `triggers` (Map of String) Arbitrary map of string values; any change triggers task re-execution
 - `validate_certs` (Boolean) This only applies if using a https URL as the source of the file. This should only set to `false` used on personally controlled sites using self-signed certificate. Prior to 2.2 the code worked as if this was set to `true`.
 
 ### Read-Only

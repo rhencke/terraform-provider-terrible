@@ -29,7 +29,7 @@ description: |-
 - `content` (String) When used instead of `src`, sets the contents of a file directly to the specified value. Works only when `dest` is a file. Creates the file if it does not exist. For advanced formatting or if `content` contains a variable, use the `ansible.builtin.template` module.
 - `delegate_to_id` (String) ID of another terrible_host to delegate execution to.
 - `directory_mode` (String) Set the access permissions of newly created directories to the given mode. Permissions on existing directories do not change. See `mode` for the syntax of accepted values. The target system's defaults determine permissions when this parameter is not set.
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
 - `follow` (Boolean) This flag indicates that filesystem links in the destination, if they exist, should be followed.
 - `force` (Boolean) Influence whether the remote file must always be replaced. If `true`, the remote file will be replaced when contents are different than the source. If `false`, the file will only be transferred if the destination does not exist.
@@ -38,11 +38,11 @@ description: |-
 - `mode` (String) The permissions of the destination file or directory. For those used to `/usr/bin/chmod` remember that modes are actually octal numbers. You must either add a leading zero so that Ansible's YAML parser knows it is an octal number (like `0644` or `01777`) or quote it (like `'644'` or `'1777'`) so Ansible receives a string and can do its own conversion from string into number. Giving Ansible a number without following one of these rules will end up with a decimal number which will have unexpected results. As of Ansible 1.8, the mode may be specified as a symbolic mode (for example, `u+rwx` or `u=rw,g=r,o=r`). As of Ansible 2.3, the mode may also be the special string `preserve`. `preserve` means that the file will be given the same permissions as the source file. When doing a recursive copy, see also `directory_mode`. If `mode` is not specified and the destination file **does not** exist, the default `umask` on the system will be used when setting the mode for the newly created file. If `mode` is not specified and the destination file **does** exist, the mode of the existing file will be used. Specifying `mode` is the best way to ensure files are created with the correct permissions. See CVE-2020-1736 for further details.
 - `poll_interval` (Number) Polling interval in seconds when async_seconds > 0. Defaults to 15.
 - `remote_src` (Boolean) Influence whether `src` needs to be transferred or already is present remotely. If `false`, it will search for `src` on the controller node. If `true`, it will search for `src` on the managed (remote) node. `remote_src` supports recursive copying as of version 2.8. `remote_src` only works with `mode=preserve` as of version 2.6. Auto-decryption of files does not work when `remote_src=yes`.
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
 - `src` (String) Local path to a file to copy to the remote server. This can be absolute or relative. If path is a directory, it is copied recursively. In this case, if path ends with `/`, only inside contents of that directory are copied to destination. Otherwise, if it does not end with `/`, the directory itself with all contents is copied. This behavior is similar to the `rsync` command line tool.
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.
-- `triggers` (String) Arbitrary map of values; any change triggers task re-execution
+- `triggers` (Map of String) Arbitrary map of string values; any change triggers task re-execution
 
 ### Read-Only
 

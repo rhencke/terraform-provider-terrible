@@ -29,7 +29,7 @@ description: |-
 - `comment` (String) Optionally sets the description (aka *GECOS*) of user account. On macOS, this defaults to the `name` option.
 - `create_home` (Boolean) Unless set to `false`, a home directory will be made for the user when the account is created or if the home directory does not exist. Changed from `createhome` to `create_home` in Ansible 2.5.
 - `delegate_to_id` (String) ID of another terrible_host to delegate execution to.
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `expires` (Number) An expiry time for the user in epoch, it will be ignored on platforms that do not support this. Currently supported on GNU/Linux, FreeBSD, and DragonFlyBSD. Since Ansible 2.6 you can remove the expiry time by specifying a negative value. Currently supported on GNU/Linux and FreeBSD.
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
 - `force` (Boolean) This only affects `state=absent`, it forces removal of the user and associated directories on supported platforms. The behavior is the same as `userdel --force`, check the man page for `userdel` on your system for details and support. When used with `generate_ssh_key=yes` this forces an existing key to be overwritten.
@@ -56,7 +56,7 @@ description: |-
 - `seuser` (String) Optionally sets the `seuser` type `user_u` on SELinux enabled systems.
 - `shell` (String) Optionally set the user's shell. On macOS, before Ansible 2.5, the default shell for non-system users was `/usr/bin/false`. Since Ansible 2.5, the default shell for non-system users on macOS is `/bin/bash`. On other operating systems, the default shell is determined by the underlying tool invoked by this module. See Notes for a per platform list of invoked tools. From Ansible 2.18, the type is changed to *path* from *str*.
 - `skeleton` (String) Optionally set a home skeleton directory. Requires `create_home` option!
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
 - `ssh_key_bits` (Number) Optionally specify number of bits in SSH key to create. The default value depends on `ssh-keygen`.
 - `ssh_key_comment` (String) Optionally define the comment for the SSH key.
 - `ssh_key_file` (String) Optionally specify the SSH key filename. If this is a relative filename then it will be relative to the user's home directory. This parameter defaults to `.ssh/id_rsa`.
@@ -64,9 +64,9 @@ description: |-
 - `ssh_key_type` (String) Optionally specify the type of SSH key to generate. Available SSH key types will depend on implementation present on target host.
 - `state` (String) Whether the account should exist or not, taking action if the state is different from what is stated. See this [FAQ entry](https://docs.ansible.com/ansible/latest/reference_appendices/faq.html#running-on-macos-as-a-target) for additional requirements when removing users on macOS systems.
 - `system` (Boolean) When creating an account `state=present`, setting this to `true` makes the user a system account. This setting cannot be changed on existing users.
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.
-- `triggers` (String) Arbitrary map of values; any change triggers task re-execution
+- `triggers` (Map of String) Arbitrary map of string values; any change triggers task re-execution
 - `uid` (Number) Optionally sets the *UID* of the user.
 - `uid_max` (Number) Sets the UID_MAX value for user creation. Overwrites /etc/login.defs default value. Currently supported on Linux. Does nothing when used with other platforms. Requires `local` is omitted or `False`.
 - `uid_min` (Number) Sets the UID_MIN value for user creation. Overwrites /etc/login.defs default value. Currently supported on Linux. Does nothing when used with other platforms. Requires `local` is omitted or `False`.

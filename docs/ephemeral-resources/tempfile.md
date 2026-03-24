@@ -22,13 +22,13 @@ description: |-
 ### Optional
 
 - `delegate_to_id` (String) ID of another terrible_host to delegate execution to.
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
 - `ignore_errors` (Boolean) When true, a failed task does not raise a Terraform error.
 - `path` (String) Location where temporary file or directory should be created. If path is not specified, the default system temporary directory will be used.
 - `prefix` (String) Prefix of file/directory name created by module.
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
 - `state` (String) Whether to create file or directory.
 - `suffix` (String) Suffix of file/directory name created by module.
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.

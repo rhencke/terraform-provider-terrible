@@ -32,7 +32,7 @@ description: |-
 - `client_key` (String) PEM formatted file that contains your private key to be used for SSL client authentication. If `client_cert` contains both the certificate and key, this option is not required.
 - `decompress` (Boolean) Whether to attempt to decompress gzip content-encoded responses.
 - `delegate_to_id` (String) ID of another terrible_host to delegate execution to.
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
 - `force` (Boolean) If `true` and `dest` is not a directory, will download the file every time and replace the file if the contents change. If `false`, the file will only be downloaded if the destination does not exist. Generally should be `true` only for small local files. Prior to 0.6, this module behaved as if `true` was the default.
 - `force_basic_auth` (Boolean) Force the sending of the Basic authentication header upon initial request. httplib2, the library used by the uri module only sends authentication information when a webservice responds to an initial request with a 401 status. Since some basic auth services do not properly send a 401, logins will fail.
@@ -40,11 +40,11 @@ description: |-
 - `http_agent` (String) Header to identify as, generally appears in web server logs.
 - `ignore_errors` (Boolean) When true, a failed task does not raise a Terraform error.
 - `poll_interval` (Number) Polling interval in seconds when async_seconds > 0. Defaults to 15.
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.
 - `tmp_dest` (String) Absolute path of where temporary file is downloaded to. When run on Ansible 2.5 or greater, path defaults to ansible's `remote_tmp` setting. When run on Ansible prior to 2.5, it defaults to `TMPDIR`, `TEMP` or `TMP` env variables or a platform specific value. https://docs.python.org/3/library/tempfile.html#tempfile.tempdir.
-- `triggers` (String) Arbitrary map of values; any change triggers task re-execution
+- `triggers` (Map of String) Arbitrary map of string values; any change triggers task re-execution
 - `unredirected_headers` (String) A list of header names that will not be sent on subsequent redirected requests. This list is case insensitive. By default all headers will be redirected. In some cases it may be beneficial to list headers such as `Authorization` here to avoid potential credential exposure.
 - `url_password` (String) The password for use in HTTP basic authentication. If the `url_username` parameter is not specified, the `url_password` parameter will not be used. Since version 2.8 you can also use the `password` alias for this option.
 - `url_username` (String) The username for use in HTTP basic authentication. This parameter can be used without `url_password` for sites that allow empty passwords. Since version 2.8 you can also use the `username` alias for this option.

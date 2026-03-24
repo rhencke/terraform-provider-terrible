@@ -30,7 +30,7 @@ description: |-
 - `create` (Boolean) Create a new file if it does not exist.
 - `delegate_to_id` (String) ID of another terrible_host to delegate execution to.
 - `encoding` (String) The character set in which the target file is encoded. For a list of available built-in encodings, see https://docs.python.org/3/library/codecs.html#standard-encodings
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
 - `ignore_errors` (Boolean) When true, a failed task does not raise a Terraform error.
 - `insertafter` (String) If specified and no begin/ending `marker` lines are found, the block will be inserted after the last match of specified regular expression. A special value is available; `EOF` for inserting the block at the end of the file. If specified regular expression has no matches or no value is passed, `EOF` will be used instead. The presence of the multiline flag (?m) in the regular expression controls whether the match is done line by line or with multiple lines. This behaviour was added in ansible-core 2.14.
@@ -40,11 +40,11 @@ description: |-
 - `marker_end` (String) This will be inserted at `{mark}` in the closing ansible block `marker`.
 - `poll_interval` (Number) Polling interval in seconds when async_seconds > 0. Defaults to 15.
 - `prepend_newline` (Boolean) Prepend a blank line to the inserted block, if this does not appear at the beginning of the file. Note that this attribute is not considered when `state` is set to `absent`
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
 - `state` (String) Whether the block should be there or not.
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.
-- `triggers` (String) Arbitrary map of values; any change triggers task re-execution
+- `triggers` (Map of String) Arbitrary map of string values; any change triggers task re-execution
 
 ### Read-Only
 

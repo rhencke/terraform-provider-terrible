@@ -30,7 +30,7 @@ description: |-
 - `delegate_to_id` (String) ID of another terrible_host to delegate execution to.
 - `disabled` (Boolean) If the job should be disabled (commented out) in the crontab. Only has effect if `state=present`.
 - `env` (Boolean) If set, manages a crontab's environment variable. New variables are added on top of crontab. `name` and `value` parameters are the name and the value of environment variable.
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
 - `hour` (String) Hour when the job should run (`0-23`, `*`, `*/2`, and so on). Cannot be combined with `special_time`.
 - `ignore_errors` (Boolean) When true, a failed task does not raise a Terraform error.
@@ -40,12 +40,12 @@ description: |-
 - `minute` (String) Minute when the job should run (`0-59`, `*`, `*/2`, and so on). Cannot be combined with `special_time`.
 - `month` (String) Month of the year the job should run (`JAN-DEC` or `1-12`, `*`, `*/2`, and so on). Cannot be combined with `special_time`.
 - `poll_interval` (Number) Polling interval in seconds when async_seconds > 0. Defaults to 15.
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
 - `special_time` (String) Special time specification nickname. Cannot be combined with `minute`, `hour`, `day`, `month` or `weekday`.
 - `state` (String) Whether to ensure the job or environment variable is present or absent.
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.
-- `triggers` (String) Arbitrary map of values; any change triggers task re-execution
+- `triggers` (Map of String) Arbitrary map of string values; any change triggers task re-execution
 - `user` (String) The specific user whose crontab should be modified. When unset, this parameter defaults to the current user.
 - `weekday` (String) Day of the week that the job should run (`SUN-SAT` or `0-6`, `*`, and so on). Cannot be combined with `special_time`.
 

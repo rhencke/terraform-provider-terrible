@@ -39,7 +39,7 @@ description: |-
 - `download_only` (Boolean) Only download the packages, do not install them.
 - `enable_plugin` (String) `Plugin` name to enable for the install/update operation. The enabled plugin will not persist beyond the transaction.
 - `enablerepo` (String) `Repoid` of repositories to enable for the install/update operation. These repos will not persist beyond the transaction. When specifying multiple repos, separate them with a ",".
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `exclude` (String) Package name(s) to exclude when `state=present`, or latest. This can be a list or a comma separated string.
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
 - `ignore_errors` (Boolean) When true, a failed task does not raise a Terraform error.
@@ -53,12 +53,12 @@ description: |-
 - `releasever` (String) Specifies an alternative release from which all packages will be installed.
 - `security` (Boolean) If set to `true`, and `state=latest` then only installs updates that have been marked security related. Note that, similar to `dnf upgrade-minimal`, this filter applies to dependencies as well.
 - `skip_broken` (Boolean) Skip all unavailable packages or packages with broken dependencies without raising an error. Equivalent to passing the `--skip-broken` option.
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
 - `sslverify` (Boolean) Disables SSL validation of the repository server for this transaction. This should be set to `false` if one of the configured repositories is using an untrusted or self-signed certificate.
 - `state` (String) Whether to install (`present`, `latest`), or remove (`absent`) a package. Default is `None`, however in effect the default action is `present` unless the `autoremove=true`, then `absent` is inferred.
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.
-- `triggers` (String) Arbitrary map of values; any change triggers task re-execution
+- `triggers` (Map of String) Arbitrary map of string values; any change triggers task re-execution
 - `update_cache` (Boolean) Force dnf to check if cache is out of date and redownload if needed. Has an effect only if `state=present` or `state=latest`.
 - `update_only` (Boolean) When using latest, only update installed packages. Do not install packages. Has an effect only if `state=present` or `state=latest`.
 - `use_backend` (String) Backend module to use.

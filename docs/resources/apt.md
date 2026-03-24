@@ -35,7 +35,7 @@ description: |-
 - `default_release` (String) Corresponds to the `-t` option for *apt* and sets pin priorities.
 - `delegate_to_id` (String) ID of another terrible_host to delegate execution to.
 - `dpkg_options` (String) Add `dpkg` options to `apt` command. Defaults to `-o "Dpkg::Options::=--force-confdef" -o "Dpkg::Options::=--force-confold"`. Options should be supplied as comma separated list.
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `fail_on_autoremove` (Boolean) Corresponds to the `--no-remove` option for `apt`. If `true`, it is ensured that no packages will be removed or the task will fail. `fail_on_autoremove` is only supported with `state` except `absent`. `fail_on_autoremove` is only supported by `apt` and will be ignored if `aptitude` is detected or specified.
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
 - `force` (Boolean) Corresponds to the `--force-yes` to `apt-get` and implies `allow_unauthenticated=yes` and `allow_downgrade=yes`. This option will disable checking both the packages' signatures and the certificates of the web servers they are downloaded from. This option *is not* the equivalent of passing the `-f` flag to `apt-get` on the command line. **This is a destructive operation with the potential to destroy your system, and it should almost never be used.** Please also see `man apt-get` for more information.
@@ -48,11 +48,11 @@ description: |-
 - `policy_rc_d` (Number) Force the exit code of `/usr/sbin/policy-rc.d`. For example, if `policy_rc_d=101` the installed package will not trigger a service start. If `/usr/sbin/policy-rc.d` already exists, it is backed up and restored after the package installation. If `null`, the `/usr/sbin/policy-rc.d` is not created/changed.
 - `poll_interval` (Number) Polling interval in seconds when async_seconds > 0. Defaults to 15.
 - `purge` (Boolean) Will force purging of configuration files if `state=absent` or `autoremove=yes`.
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
 - `state` (String) Indicates the desired package state. `latest` ensures that the latest version is installed. `build-dep` ensures the package build dependencies are installed. `fixed` attempt to correct a system with broken dependencies in place.
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.
-- `triggers` (String) Arbitrary map of values; any change triggers task re-execution
+- `triggers` (Map of String) Arbitrary map of string values; any change triggers task re-execution
 - `update_cache` (Boolean) Run the equivalent of `apt-get update` before the operation. Can be run as part of the package installation or as a separate step. Default is not to update the cache.
 - `update_cache_retries` (Number) Amount of retries if the cache update fails. Also see `update_cache_retry_max_delay`.
 - `update_cache_retry_max_delay` (Number) Use an exponential backoff delay for each retry (see `update_cache_retries`) up to this max delay in seconds.

@@ -33,7 +33,7 @@ description: |-
 - `destination_port` (String) Destination port or port range specification. This can either be a service name or a port number. An inclusive range can also be specified, using the format first:last. If the first port is omitted, '0' is assumed; if the last is omitted, '65535' is assumed. If the first port is greater than the second one they will be swapped. This is only valid if the rule also specifies one of the following protocols: tcp, udp, dccp or sctp.
 - `destination_ports` (String) This specifies multiple destination port numbers or port ranges to match in the multiport module. It can only be used in conjunction with the protocols tcp, udp, udplite, dccp and sctp.
 - `dst_range` (String) Specifies the destination IP range to match in the iprange module.
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
 - `flush` (Boolean) Flushes the specified table and chain of all rules. If no chain is specified then the entire table is purged. Ignores all other parameters.
 - `fragment` (String) This means that the rule only refers to second and further fragments of fragmented packets. Since there is no way to tell the source or destination ports of such a packet (or ICMP type), such a packet will not match any rules which specify them. When the "!" argument precedes the fragment argument, the rule will only match head fragments, or unfragmented packets.
@@ -62,20 +62,20 @@ description: |-
 - `set_counters` (String) This enables the administrator to initialize the packet and byte counters of a rule (during `INSERT`, `APPEND`, `REPLACE` operations).
 - `set_dscp_mark` (String) This allows specifying a DSCP mark to be added to packets. It takes either an integer or hex value. If the parameter is set, `jump` is set to `DSCP`. Mutually exclusive with `set_dscp_mark_class`.
 - `set_dscp_mark_class` (String) This allows specifying a predefined DiffServ class which will be translated to the corresponding DSCP mark. If the parameter is set, `jump` is set to `DSCP`. Mutually exclusive with `set_dscp_mark`.
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
 - `source` (String) Source specification. Address can be either a network name, a hostname, a network IP address (with /mask), or a plain IP address. Hostnames will be resolved once only, before the rule is submitted to the kernel. Please note that specifying any name to be resolved with a remote query such as DNS is a really bad idea. The mask can be either a network mask or a plain number, specifying the number of 1's at the left side of the network mask. Thus, a mask of 24 is equivalent to 255.255.255.0. A `!` argument before the address specification inverts the sense of the address.
 - `source_port` (String) Source port or port range specification. This can either be a service name or a port number. An inclusive range can also be specified, using the format `first:last`. If the first port is omitted, `0` is assumed; if the last is omitted, `65535` is assumed. If the first port is greater than the second one they will be swapped.
 - `src_range` (String) Specifies the source IP range to match the iprange module.
 - `state` (String) Whether the rule should be absent or present.
 - `syn` (String) This allows matching packets that have the SYN bit set and the ACK and RST bits unset. When negated, this matches all packets with the RST or the ACK bits set.
 - `table` (String) This option specifies the packet matching table on which the command should operate. If the kernel is configured with automatic module loading, an attempt will be made to load the appropriate module for that table if it is not already there.
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `tcp_flags` (String) TCP flags specification. `tcp_flags` expects a dict with the two keys `flags` and `flags_set`.
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.
 - `to_destination` (String) This specifies a destination address to use with `ctstate=DNAT`. Without this, the destination address is never altered.
 - `to_ports` (String) This specifies a destination port or range of ports to use, without this, the destination port is never altered. This is only valid if the rule also specifies one of the protocol `tcp`, `udp`, `dccp` or `sctp`.
 - `to_source` (String) This specifies a source address to use with `ctstate=SNAT`. Without this, the source address is never altered.
-- `triggers` (String) Arbitrary map of values; any change triggers task re-execution
+- `triggers` (Map of String) Arbitrary map of string values; any change triggers task re-execution
 - `uid_owner` (String) Specifies the UID or username to use in the match by owner rule. From Ansible 2.6 when the `!` argument is prepended then the it inverts the rule to apply instead to all users except that one specified.
 - `wait` (String) Wait N seconds for the xtables lock to prevent multiple instances of the program from running concurrently.
 
