@@ -2,7 +2,7 @@ terraform {
   required_providers {
     terrible = {
       source  = "registry.terraform.io/rhencke/terrible"
-      version = ">= 0.0.1"
+      version = ">= 0.10.0"
     }
   }
 }
