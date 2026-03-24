@@ -14,7 +14,7 @@ _SCHEMA = Schema(attributes=[])
 class TerribleEphemeralPing(EphemeralResource):
     _module_name = ""
     _schema = _SCHEMA
-    _name = "terrible_ephemeral_ping"
+    _name = "ephemeral_ping"
 
     @classmethod
     def get_name(cls) -> str:

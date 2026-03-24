@@ -140,7 +140,8 @@ class EphemeralMixin:
     def _load_ephemeral_cls_map(self) -> dict:
         if not hasattr(self, "_ephemeral_cls_map"):
             klasses = self.app.get_ephemeral_resources() if hasattr(self.app, "get_ephemeral_resources") else []
-            self._ephemeral_cls_map = {k.get_name(): k for k in klasses}
+            prefix = self.app.get_model_prefix() if hasattr(self.app, "get_model_prefix") else ""
+            self._ephemeral_cls_map = {prefix + k.get_name(): k for k in klasses}
         return self._ephemeral_cls_map
 
     def _get_ephemeral_cls(self, type_name: str, context):

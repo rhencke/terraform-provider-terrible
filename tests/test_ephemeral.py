@@ -165,7 +165,7 @@ class TestEphemeralResource:
 
 class TestTerribleEphemeralPing:
     def test_get_name(self):
-        assert TerribleEphemeralPing.get_name() == "terrible_ephemeral_ping"
+        assert TerribleEphemeralPing.get_name() == "ephemeral_ping"
 
     def test_get_schema_returns_schema(self):
         schema = TerribleEphemeralPing.get_schema()
@@ -200,6 +200,7 @@ def _make_servicer(ephemeral_classes=None):
     app.get_ephemeral_resources.return_value = (
         [TerribleEphemeralPing] if ephemeral_classes is None else ephemeral_classes
     )
+    app.get_model_prefix.return_value = "terrible_"
 
     def new_ephemeral_resource(klass):
         return klass(app)
@@ -227,6 +228,17 @@ class TestEphemeralMixin:
         cls_map = svc._load_ephemeral_cls_map()
         assert "terrible_ephemeral_ping" in cls_map
         assert cls_map["terrible_ephemeral_ping"] is TerribleEphemeralPing
+
+    def test_load_ephemeral_cls_map_adds_prefix(self):
+        """Auto-discovered classes with short names get the model prefix applied."""
+        from terrible_provider.discovery import make_ephemeral_class
+
+        klass = make_ephemeral_class("ansible.builtin.ping", {}, {})
+        assert klass.get_name() == "ping"  # short name
+        svc = _make_servicer([klass])
+        cls_map = svc._load_ephemeral_cls_map()
+        assert "terrible_ping" in cls_map
+        assert "ping" not in cls_map
 
     def test_load_ephemeral_cls_map_cached(self):
         svc = _make_servicer([TerribleEphemeralPing])
