@@ -776,7 +776,7 @@ dev = [
 requires-dist = [
     { name = "ansible", specifier = ">=13.3.0" },
     { name = "pywinrm", specifier = ">=0.4.0" },
-    { name = "tf", specifier = ">=1.1.0" },
+    { name = "tf", directory = "/workspaces/tf" },
 ]
 
 [package.metadata.requires-dev]
@@ -792,17 +792,20 @@ dev = [
 
 [[package]]
 name = "tf"
-version = "1.1.0"
-source = { registry = "https://pypi.org/simple" }
+source = { directory = "/workspaces/tf" }
 dependencies = [
     { name = "cryptography" },
     { name = "grpcio" },
     { name = "msgpack" },
     { name = "protobuf" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/73/23/2a9e5ce382375064de0903404120ca43af786e64ad8f4e0c509bf8cbdde6/tf-1.1.0.tar.gz", hash = "sha256:7ae9cb641deb72084097f0aa19afc19f90fb1899bf477709f9f695f8a63c60c0", size = 49866, upload-time = "2025-08-21T04:13:55.068Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a3/07/fee32a16de23ff0862fae7ebb369c49d149c62777487306559c8bf6a6428/tf-1.1.0-py3-none-any.whl", hash = "sha256:b8ce99931b25557b77a9aab7b6fe2958dc3bf5062c63fdcbc0359384b769d13a", size = 60215, upload-time = "2025-08-21T04:13:54.008Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "cryptography", specifier = ">43" },
+    { name = "grpcio", specifier = ">=1.67.1,<2.0.0" },
+    { name = "msgpack", specifier = ">=1.1.0,<2.0.0" },
+    { name = "protobuf", specifier = ">=5.28.3,<6.0.0" },
 ]
 
 [[package]]
