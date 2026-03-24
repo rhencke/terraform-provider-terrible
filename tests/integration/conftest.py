@@ -27,7 +27,7 @@ REPO_ROOT = Path(__file__).parent.parent.parent
 PROVIDER_HOST = "registry.terraform.io"
 PROVIDER_NS = "rhencke"
 PROVIDER_TYPE = "terrible"
-PROVIDER_VERSION = "0.0.1"
+PROVIDER_VERSION = "0.10.0"
 
 
 def _find_provider_entrypoint() -> Path:
