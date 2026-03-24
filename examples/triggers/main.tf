@@ -1,6 +1,6 @@
 # Triggers — re-run a task when inputs change, even if the task itself is idempotent
 #
-# The `triggers` attribute accepts an arbitrary map.  When any value in the map
+# The `triggers` attribute accepts a map(string).  When any value in the map
 # changes between applies, terrible treats the resource as dirty and re-runs the
 # task, regardless of whether the module itself would report a change.
 #
@@ -61,9 +61,9 @@ resource "terrible_copy" "version_file" {
   content = "${var.app_version}\n"
   dest    = "/tmp/terrible_triggers/version.txt"
 
-  triggers = jsonencode({
+  triggers = {
     version = var.app_version
-  })
+  }
 
   depends_on = [terrible_file.workdir]
 }
@@ -75,10 +75,10 @@ resource "terrible_command" "restart" {
   host_id = terrible_host.app.id
   cmd     = "touch /tmp/terrible_triggers/last_restart"
 
-  triggers = jsonencode({
+  triggers = {
     config_hash = md5(var.config_content)
     app_version = var.app_version
-  })
+  }
 
   depends_on = [terrible_copy.config, terrible_copy.version_file]
 }

@@ -32,7 +32,7 @@ description: |-
 - `decompress` (Boolean) Whether to attempt to decompress gzip content-encoded responses.
 - `delegate_to_id` (String) ID of another terrible_host to delegate execution to.
 - `dest` (String) A path of where to download the file to (if desired). If `dest` is a directory, the basename of the file on the remote server will be used.
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
 - `force` (Boolean) If `true` do not get a cached copy.
 - `force_basic_auth` (Boolean) Force the sending of the Basic authentication header upon initial request. When this setting is `false`, this module will first try an unauthenticated request, and when the server replies with an `HTTP 401` error, it will submit the Basic authentication header. When this setting is `true`, this module will immediately send a Basic authentication header on the first request. Use this setting in any of the following scenarios: You know the webservice endpoint always requires HTTP Basic authentication, and you want to speed up your requests by eliminating the first roundtrip. The web service does not properly send an HTTP 401 error to your client, so Ansible's HTTP library will not properly respond with HTTP credentials, and logins will fail. The webservice bans or rate-limits clients that cause any HTTP 401 errors.
@@ -43,10 +43,10 @@ description: |-
 - `remote_src` (Boolean) If `false`, the module will search for the `src` on the controller node. If `true`, the module will search for the `src` on the managed (remote) node.
 - `removes` (String) A filename, when it does not exist, this step will not be run.
 - `return_content` (Boolean) Whether or not to return the body of the response as a "content" key in the dictionary result no matter it succeeded or failed. Independently of this option, if the reported `Content-Type` is `application/json`, then the JSON is always loaded into a key called R`ignore:json` in the dictionary results.
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
 - `src` (String) Path to file to be submitted to the remote server. Cannot be used with `body`. Should be used with `force_basic_auth` to ensure success when the remote end sends a 401.
 - `status_code` (String) A list of valid, numeric, HTTP status codes that signifies success of the request.
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.
 - `unix_socket` (String) Path to Unix domain socket to use for connection.
 - `unredirected_headers` (String) A list of header names that will not be sent on subsequent redirected requests. This list is case insensitive. By default all headers will be redirected. In some cases it may be beneficial to list headers such as `Authorization` here to avoid potential credential exposure.

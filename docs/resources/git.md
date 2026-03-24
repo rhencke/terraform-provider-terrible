@@ -33,7 +33,7 @@ description: |-
 - `clone` (Boolean) If `false`, do not clone the repository even if it does not exist locally.
 - `delegate_to_id` (String) ID of another terrible_host to delegate execution to.
 - `depth` (Number) Create a shallow clone with a history truncated to the specified number or revisions. The minimum possible value is `1`, otherwise ignored. Needs *git>=1.9.1* to work correctly.
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `executable` (String) Path to git executable to use. If not supplied, the normal mechanism for resolving binary paths will be used.
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
 - `force` (Boolean) If `true`, any modified files in the working repository will be discarded.  Prior to 0.7, this was always `true` and could not be disabled.  Prior to 1.9, the default was `true`.
@@ -47,12 +47,12 @@ description: |-
 - `remote` (String) Name of the remote.
 - `separate_git_dir` (String) The path to place the cloned repository. If specified, Git repository can be separated from working tree.
 - `single_branch` (Boolean) Clone only the history leading to the tip of the specified revision.
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
 - `ssh_opts` (String) Options git will pass to ssh when used as protocol, it works via `git`'s `GIT_SSH`/`GIT_SSH_COMMAND` environment variables. For older versions it appends `GIT_SSH_OPTS` (specific to this module) to the variables above or via a wrapper script. Other options can add to this list, like `key_file` and `accept_hostkey`. An example value could be `-o StrictHostKeyChecking=no` (although this particular option is better set by `accept_hostkey`). The module ensures that `BatchMode=yes` is always present to avoid prompts.
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.
 - `track_submodules` (Boolean) If `true`, submodules will track the latest commit on their master branch (or other branch specified in `.gitmodules`).  If `false`, submodules will be kept at the revision specified by the main project. This is equivalent to specifying the `--remote` flag to git submodule update.
-- `triggers` (String) Arbitrary map of values; any change triggers task re-execution
+- `triggers` (Map of String) Arbitrary map of string values; any change triggers task re-execution
 - `umask` (String) The umask to set before doing any checkouts, or any other repository maintenance.
 - `update` (Boolean) If `false`, do not retrieve new revisions from the origin repository. Operations like archive will work on the existing (old) repository and might not respond to changes to the options version or remote.
 - `verify_commit` (Boolean) If `true`, when cloning or checking out a `version` verify the signature of a GPG signed commit. This requires git version>=2.1.0 to be installed. The commit MUST be signed and the public key MUST be present in the GPG keyring.

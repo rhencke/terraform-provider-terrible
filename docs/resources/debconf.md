@@ -25,15 +25,15 @@ description: |-
 - `async_seconds` (Number) Run the task asynchronously, timing out after this many seconds. 0 = synchronous (default).
 - `changed_when` (String) Jinja2 expression that overrides when the task is considered changed (e.g. 'false').
 - `delegate_to_id` (String) ID of another terrible_host to delegate execution to.
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
 - `ignore_errors` (Boolean) When true, a failed task does not raise a Terraform error.
 - `poll_interval` (Number) Polling interval in seconds when async_seconds > 0. Defaults to 15.
 - `question` (String) A debconf configuration setting.
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.
-- `triggers` (String) Arbitrary map of values; any change triggers task re-execution
+- `triggers` (Map of String) Arbitrary map of string values; any change triggers task re-execution
 - `unseen` (Boolean) Do not set `seen` flag when pre-seeding.
 - `value` (String) Value to set the configuration to. After Ansible 2.17, `value` is of type `raw`.
 - `vtype` (String) The type of the value supplied. It is highly recommended to add `no_log=True` to task while specifying `vtype=password`. `seen` was added in Ansible 2.2. After Ansible 2.17, user can specify `value` as a list, if `vtype` is set as `multiselect`.

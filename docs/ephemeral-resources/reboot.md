@@ -24,7 +24,7 @@ description: |-
 - `boot_time_command` (String) Command to run that returns a unique string indicating the last time the system was booted. Setting this to a command that has different output each time it is run will cause the task to fail.
 - `connect_timeout` (Number) Maximum seconds to wait for a successful connection to the managed hosts before trying again. If unspecified, the default setting for the underlying connection plugin is used.
 - `delegate_to_id` (String) ID of another terrible_host to delegate execution to.
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
 - `ignore_errors` (Boolean) When true, a failed task does not raise a Terraform error.
 - `msg` (String) Message to display to users before reboot.
@@ -33,8 +33,8 @@ description: |-
 - `reboot_command` (String) Command to run that reboots the system, including any parameters passed to the command. Can be an absolute path to the command or just the command name. If an absolute path to the command is not given, `search_paths` on the target system will be searched to find the absolute path. This will cause `pre_reboot_delay`, `post_reboot_delay`, and `msg` to be ignored.
 - `reboot_timeout` (Number) Maximum seconds to wait for machine to reboot and respond to a test command. This timeout is evaluated separately for both reboot verification and test command success so the maximum execution time for the module is twice this amount.
 - `search_paths` (String) Paths to search on the remote machine for the `shutdown` command. *Only* these paths will be searched for the `shutdown` command. `PATH` is ignored in the remote node when searching for the `shutdown` command.
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `test_command` (String) Command to run on the rebooted host and expect success from to determine the machine is ready for further tasks.
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.
 

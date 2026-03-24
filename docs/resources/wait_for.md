@@ -27,7 +27,7 @@ description: |-
 - `connect_timeout` (Number) Maximum number of seconds to wait for a connection to happen before closing and retrying.
 - `delay` (Number) Number of seconds to wait before starting to poll.
 - `delegate_to_id` (String) ID of another terrible_host to delegate execution to.
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `exclude_hosts` (String) List of hosts or IPs to ignore when looking for active TCP connections for `drained` state.
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
 - `host` (String) A resolvable hostname or IP address to wait for.
@@ -37,12 +37,12 @@ description: |-
 - `poll_interval` (Number) Polling interval in seconds when async_seconds > 0. Defaults to 15.
 - `port` (Number) Port number to poll. `path` and `port` are mutually exclusive parameters.
 - `search_regex` (String) Can be used to match a string in either a file or a socket connection. Defaults to a multiline regex. When inspecting a system log file and a static string, remember that Ansible by default logs its own actions there; see the notes and examples for information.
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
 - `sleep` (Number) Number of seconds to sleep between checks. Before Ansible 2.3 this was hardcoded to 1 second.
 - `state` (String) Either `present`, `started`, or `stopped`, `absent`, or `drained`. When checking a port `started` will ensure the port is open, `stopped` will check that it is closed, `drained` will check for active connections. When checking for a file or a search string `present` or `started` will ensure that the file or string is present before continuing, `absent` will check that file is absent or removed.
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.
-- `triggers` (String) Arbitrary map of values; any change triggers task re-execution
+- `triggers` (Map of String) Arbitrary map of string values; any change triggers task re-execution
 
 ### Read-Only
 

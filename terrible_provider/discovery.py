@@ -19,7 +19,7 @@ from pathlib import Path
 
 import yaml
 from tf.schema import Attribute, Schema
-from tf.types import Bool, NormalizedJson, Number, String
+from tf.types import Bool, List, Map, NormalizedJson, Number, String
 
 from .task_base import _MODULE_TIMEOUT, TerribleTaskBase
 from .task_datasource import TerribleTaskDataSource
@@ -169,8 +169,8 @@ _FRAMEWORK_ATTRS = [
     Attribute("changed", Bool(), description="Whether the task reported a change", computed=True),
     Attribute(
         "triggers",
-        NormalizedJson(),
-        description="Arbitrary map of values; any change triggers task re-execution",
+        Map(String()),
+        description="Arbitrary map of string values; any change triggers task re-execution",
         optional=True,
     ),
     Attribute(
@@ -199,19 +199,19 @@ _FRAMEWORK_ATTRS = [
     ),
     Attribute(
         "environment",
-        NormalizedJson(),
-        description="Environment variables set for the task (dict of name→value).",
+        Map(String()),
+        description="Environment variables set for the task (map of name→value).",
         optional=True,
     ),
     Attribute(
         "tags",
-        NormalizedJson(),
+        List(String()),
         description="Run only tasks with these Ansible tags (list of strings).",
         optional=True,
     ),
     Attribute(
         "skip_tags",
-        NormalizedJson(),
+        List(String()),
         description="Skip tasks with these Ansible tags (list of strings).",
         optional=True,
     ),
@@ -277,19 +277,19 @@ _EPHEMERAL_FRAMEWORK_ATTRS = [
     ),
     Attribute(
         "environment",
-        NormalizedJson(),
-        description="Environment variables set for the task (dict of name→value).",
+        Map(String()),
+        description="Environment variables set for the task (map of name→value).",
         optional=True,
     ),
     Attribute(
         "tags",
-        NormalizedJson(),
+        List(String()),
         description="Run only tasks with these Ansible tags (list of strings).",
         optional=True,
     ),
     Attribute(
         "skip_tags",
-        NormalizedJson(),
+        List(String()),
         description="Skip tasks with these Ansible tags (list of strings).",
         optional=True,
     ),

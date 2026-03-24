@@ -35,7 +35,7 @@ description: |-
 - `date_max_future` (Number) Controls how far from the future a repository may be.
 - `delegate_to_id` (String) ID of another terrible_host to delegate execution to.
 - `enabled` (Boolean) Tells APT whether the source is enabled or not.
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
 - `ignore_errors` (Boolean) When true, a failed task does not raise a Terraform error.
 - `inrelease_path` (String) Determines the path to the `InRelease` file, relative to the normal position of an `InRelease` file.
@@ -45,13 +45,13 @@ description: |-
 - `pdiffs` (Boolean) Controls if APT should try to use `PDiffs` to update old indexes instead of downloading the new indexes entirely.
 - `poll_interval` (Number) Polling interval in seconds when async_seconds > 0. Defaults to 15.
 - `signed_by` (String) Either a URL to a GPG key, absolute path to a keyring file, one or more fingerprints of keys either in the `trusted.gpg` keyring or in the keyrings in the `trusted.gpg.d/` directory, or an ASCII armored GPG public key block.
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
 - `state` (String) A source string state.
 - `suites` (String) Suite can specify an exact path in relation to the UR*s* provided, in which case the Components: must be omitted and suite must end with a slash (`/`). Alternatively, it may take the form of a distribution version (for example a version codename like `disco` or `artful`). If the suite does not specify a path, at least one component must be present.
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `targets` (String) Defines which download targets apt will try to acquire from this source.
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.
-- `triggers` (String) Arbitrary map of values; any change triggers task re-execution
+- `triggers` (Map of String) Arbitrary map of string values; any change triggers task re-execution
 - `trusted` (Boolean) Decides if a source is considered trusted or if warnings should be raised before, for example packages are installed from this source.
 - `types` (String) Which types of packages to look for from a given source; either binary `deb` or source code `deb-src`.
 - `uris` (String) The URIs must specify the base of the Debian distribution archive, from which APT finds the information it needs.

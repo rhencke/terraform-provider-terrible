@@ -24,12 +24,12 @@ description: |-
 ### Optional
 
 - `delegate_to_id` (String) ID of another terrible_host to delegate execution to.
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `fail_on_missing` (Boolean) When set to `true`, the task will fail if the remote file cannot be read for any reason. Prior to Ansible 2.5, setting this would only fail if the source file was missing. The default was changed to `true` in Ansible 2.5.
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
 - `flat` (Boolean) Allows you to override the default behavior of appending hostname/path/to/file to the destination. If `dest` ends with '/', it will use the basename of the source file, similar to the copy module. This can be useful if working with a single host, or if retrieving files that are uniquely named per host. If using multiple hosts with the same filename, the file will be overwritten for each host.
 - `ignore_errors` (Boolean) When true, a failed task does not raise a Terraform error.
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.
 - `validate_checksum` (Boolean) Verify that the source and destination checksums match after the files are fetched.

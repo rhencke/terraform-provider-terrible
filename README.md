@@ -1,26 +1,27 @@
 # terrible — Terraform Provider for Ansible (pure Python)
 
-A minimal Terraform provider that integrates with Ansible, implemented in pure Python.
-This repository contains a small reference implementation and helpers to use Ansible
-playbooks and tasks as Terraform-managed resources.
+A Terraform/OpenTofu provider that exposes Ansible tasks as Terraform-managed resources. Operators define target hosts and Ansible module executions as Terraform resources, keeping everything in state — no Ansible inventory required.
 
 ## Overview
 
-This project aims to provide a lightweight Terraform provider that delegates
-configuration to Ansible. It's written in pure Python to make development and
-extension easy for Python-savvy operators.
+**terrible** executes Ansible modules in-process (no SSH round-trips for the Ansible control path) and maps module inputs/outputs to Terraform resource attributes. Task resources are discovered dynamically from all installed Ansible modules at startup; schemas are generated from each module's `DOCUMENTATION` and `RETURN` blocks.
 
 ## Features
 
-- Use Ansible playbooks as Terraform-managed resources
-- Small, easy-to-read Python codebase for learning and extension
-- Example integration patterns for provisioning and configuration
+- Every installed Ansible module becomes a Terraform resource (`terrible_ping`, `terrible_command`, `terrible_file`, etc.)
+- Community collection modules are also discovered (`terrible_community_general_git_config`, etc.)
+- Data sources generated for modules with full check-mode support (`terrible_datasource_stat`, etc.)
+- Ephemeral resources for one-shot operations that don't persist to state
+- WinRM support for Windows targets
+- Ansible Vault integration (`terrible_vault` data source)
+- State-file–based drift detection via Ansible check mode
 
 ## Requirements
 
 - Python 3.12+
 - Terraform or OpenTofu
-- Ansible (to execute playbooks)
+- Ansible (≥ 13.3.0)
+- uv (package management)
 
 ## Platform support
 
@@ -30,49 +31,81 @@ Binaries are provided for Linux (amd64, arm64) and macOS (arm64). Intel Mac user
 
 ## Installation
 
-This repository is a minimal implementation — it does not publish a binary
-Terraform provider. For development, install the Python dependencies from
-`pyproject.toml` and run the example code:
+The provider is published to the [Terraform Registry](https://registry.terraform.io/providers/rhencke/terrible/latest). Add it to your Terraform configuration:
 
-```bash
-python -m pip install -e .
+```hcl
+terraform {
+  required_providers {
+    terrible = {
+      source  = "rhencke/terrible"
+    }
+  }
+}
 ```
 
-## Usage
+## Quick start
 
-Install in editable mode and run the provider in dev (reattach) mode:
+```hcl
+provider "terrible" {}
 
-```bash
-pip install -e .
-make run-provider       # prints TF_REATTACH_PROVIDERS
-make example-fresh      # install, wipe state, auto-apply the example config
+resource "terrible_host" "localhost" {
+  connection = "local"
+}
+
+resource "terrible_ping" "check" {
+  host_id = terrible_host.localhost.id
+}
 ```
 
-See [`examples/`](examples/) for working Terraform configurations demonstrating
-task chains, parallel execution, triggers, and cloud VM provisioning.
+See [`examples/`](examples/) for working configurations demonstrating task chains, parallel execution, triggers, and cloud VM provisioning.
 
 ## Development
 
-The provider lives in `terrible_provider/`. Key files:
-
-- `terrible_provider/provider.py` — provider entrypoint and state management
-- `terrible_provider/task_base.py` — in-process Ansible execution engine
-- `terrible_provider/discovery.py` — dynamic Ansible module → Terraform resource mapping
-- `terrible_provider/host.py` — `terrible_host` resource
-
-Run tests:
+### Setup
 
 ```bash
-pytest -q                          # unit tests
-make integration-test              # full Terraform + Ansible integration tests
+uv sync
+make install-hooks     # install pre-commit hook (runs tests before every commit)
 ```
 
-## Contributing
+### Common commands
 
-Contributions and issues are welcome. Keep changes focused and include tests
-when adding features.
+```bash
+make test              # unit tests (100% coverage required)
+make integration-test  # integration tests against localhost
+make test-all          # unit + integration (same as pre-commit hook)
+make run-provider      # run provider in dev mode (prints TF_REATTACH_PROVIDERS)
+make install-provider  # install provider into Terraform plugin directory
+make example-init      # terraform init for examples
+make example-apply     # terraform apply for examples
+```
+
+### Project structure
+
+```
+terrible_provider/
+  cli.py             # CLI entrypoint
+  provider.py        # TerribleProvider — schema, state, resource/datasource registry
+  host.py            # terrible_host resource
+  task_base.py       # TerribleTaskBase — dynamically-discovered Ansible module resources
+  task_datasource.py # Task data sources (modules with check_mode: full)
+  discovery.py       # Ansible modules → Terraform resources/datasources
+  play.py            # terrible_playbook and terrible_role resources (deprecated)
+  vault.py           # terrible_vault data source
+  install.py         # Provider installation utilities
+tests/
+  test_*.py          # Unit tests
+  integration/       # Integration test cases
+examples/            # Working Terraform configurations
+```
+
+### Architecture
+
+- **State:** `terrible_state.json` in the Terraform working directory
+- **Ansible execution:** In-process via `TaskQueueManager` with a single thread-safe lock
+- **Discovery:** Modules introspected at startup; schemas cached in SQLite at `~/.cache/tf-python-provider/discovery.db`
+- **Task resources:** Common attributes: `host_id`, `result`, `changed`, `triggers`, `timeout`, `ignore_errors`, `changed_when`, `failed_when`, `environment`, `tags`, `skip_tags`, `async_seconds`, `poll_interval`, `delegate_to_id`
 
 ## License
 
 GPLv3
-

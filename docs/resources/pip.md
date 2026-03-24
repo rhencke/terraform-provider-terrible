@@ -27,7 +27,7 @@ description: |-
 - `chdir` (String) cd into this directory before running the command.
 - `delegate_to_id` (String) ID of another terrible_host to delegate execution to.
 - `editable` (Boolean) Pass the editable flag.
-- `environment` (String) Environment variables set for the task (dict of name→value).
+- `environment` (Map of String) Environment variables set for the task (map of name→value).
 - `executable` (String) The explicit executable or pathname for the `pip` executable, if different from the Ansible Python interpreter. For example `pip3.13`, if there are multiple Python installations in the system and you want to run pip for the Python 3.13 installation. Mutually exclusive with `virtualenv` (added in 2.1). Does not affect the Ansible Python interpreter. The `setuptools` package must be installed for both the Ansible Python interpreter and for the version of Python specified by this option.
 - `extra_args` (String) Extra arguments passed to `pip`.
 - `failed_when` (String) Jinja2 expression that overrides when the task is considered failed.
@@ -35,11 +35,11 @@ description: |-
 - `name` (String) The name of a Python library to install or the url(bzr+,hg+,git+,svn+) of the remote package. This can be a list (since 2.2) and contain version specifiers (since 2.7).
 - `poll_interval` (Number) Polling interval in seconds when async_seconds > 0. Defaults to 15.
 - `requirements` (String) The path to a pip requirements file, which should be local to the remote system. File can be specified as a relative path if using the `chdir` option.
-- `skip_tags` (String) Skip tasks with these Ansible tags (list of strings).
+- `skip_tags` (List of String) Skip tasks with these Ansible tags (list of strings).
 - `state` (String) The state of module. The `forcereinstall` option is only available in Ansible 2.1 and above.
-- `tags` (String) Run only tasks with these Ansible tags (list of strings).
+- `tags` (List of String) Run only tasks with these Ansible tags (list of strings).
 - `timeout` (Number) Override the default execution timeout (seconds). Defaults to 300.
-- `triggers` (String) Arbitrary map of values; any change triggers task re-execution
+- `triggers` (Map of String) Arbitrary map of string values; any change triggers task re-execution
 - `umask` (String) The system umask to apply before installing the pip package. This is useful, for example, when installing on systems that have a very restrictive umask by default (e.g., `0077`) and you want to `pip install` packages which are to be used by all users. Note that this requires you to specify desired umask mode as an octal string, (e.g., `0022`).
 - `version` (String) The version number to install of the Python library specified in the `name` parameter.
 - `virtualenv` (String) An optional path to a *virtualenv* directory to install into. It cannot be specified together with the `executable` parameter (added in 2.1). If the virtualenv does not exist, it will be created before installing packages. The optional `virtualenv_site_packages`, `virtualenv_command`, and `virtualenv_python` options affect the creation of the virtualenv.
