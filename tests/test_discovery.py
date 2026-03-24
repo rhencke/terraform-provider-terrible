@@ -10,11 +10,14 @@ from tf.types import Bool, NormalizedJson, Number
 from terrible_provider.discovery import (
     _DOC_RE,
     _build_datasource_schema,
+    _build_ephemeral_schema,
     _build_schema,
     _cache_db_path,
     _check_mode_support,
+    _classify,
     _fqcn_for_path,
     _get_installed_collections,
+    _has_absent_state,
     _iter_collection_module_paths,
     _load_cached,
     _open_cache,
@@ -24,8 +27,10 @@ from terrible_provider.discovery import (
     _save_cache,
     discover_task_resources,
     make_datasource_class,
+    make_ephemeral_class,
     make_task_class,
 )
+from terrible_provider.ephemeral import EphemeralResource
 from terrible_provider.task_base import TerribleTaskBase
 from terrible_provider.task_datasource import TerribleTaskDataSource
 
@@ -33,14 +38,18 @@ from terrible_provider.task_datasource import TerribleTaskDataSource
 # Fake module file content for filesystem-walk tests
 # ---------------------------------------------------------------------------
 
-_FAKE_MODULE_FULL = '''\
+_FAKE_MODULE = '''\
 DOCUMENTATION = """
-short_description: Fake module with full check mode
+short_description: Fake module
 options:
   path:
     description: A path.
     type: str
     required: true
+  state:
+    description: State.
+    type: str
+    choices: [present, absent]
 attributes:
   check_mode:
     support: full
@@ -52,9 +61,9 @@ stat:
 """
 '''
 
-_FAKE_MODULE_NONE = '''\
+_FAKE_MODULE_NO_STATE = '''\
 DOCUMENTATION = """
-short_description: Fake module no check mode
+short_description: Fake module without state option
 options:
   name:
     description: A name.
@@ -79,6 +88,80 @@ class TestResourceNameFor:
 
     def test_hyphens_converted(self):
         assert _resource_name_for("my.col.some-module") == "my_col_some_module"
+
+
+# ---------------------------------------------------------------------------
+# _classify
+# ---------------------------------------------------------------------------
+
+
+class TestClassify:
+    def test_resource_module(self):
+        assert _classify("ansible.builtin.file") == {"resource"}
+
+    def test_datasource_module(self):
+        assert _classify("ansible.builtin.stat") == {"datasource"}
+
+    def test_ephemeral_module(self):
+        assert _classify("ansible.builtin.async_status") == {"ephemeral"}
+
+    def test_internal_module_is_empty(self):
+        assert _classify("ansible.builtin.debug") == set()
+
+    def test_community_module_is_empty(self):
+        assert _classify("community.general.git_config") == set()
+
+    def test_unknown_builtin_is_empty(self):
+        assert _classify("ansible.builtin.nonexistent_module") == set()
+
+    def test_all_resource_modules_classified(self):
+        for name in ["copy", "template", "get_url", "apt", "dnf", "user", "group", "git"]:
+            assert "resource" in _classify(f"ansible.builtin.{name}"), f"{name} should be resource"
+
+    def test_all_datasource_modules_classified(self):
+        for name in ["slurp", "find", "getent", "package_facts", "service_facts", "setup", "mount_facts"]:
+            assert "datasource" in _classify(f"ansible.builtin.{name}"), f"{name} should be datasource"
+
+    def test_all_ephemeral_modules_classified(self):
+        for name in ["command", "shell", "raw", "script", "reboot", "wait_for", "uri", "fetch"]:
+            assert "ephemeral" in _classify(f"ansible.builtin.{name}"), f"{name} should be ephemeral"
+
+    def test_transition_command_is_resource_and_ephemeral(self):
+        cls = _classify("ansible.builtin.command")
+        assert "resource" in cls and "ephemeral" in cls
+
+    def test_all_internal_modules_empty(self):
+        for name in ["debug", "assert", "fail", "set_fact", "meta", "pause", "gather_facts"]:
+            assert _classify(f"ansible.builtin.{name}") == set(), f"{name} should be empty"
+
+
+# ---------------------------------------------------------------------------
+# _has_absent_state
+# ---------------------------------------------------------------------------
+
+
+class TestHasAbsentState:
+    def test_returns_true_when_absent_in_choices(self):
+        options = {"state": {"type": "str", "choices": ["present", "absent"]}}
+        assert _has_absent_state(options) is True
+
+    def test_returns_false_when_no_state_option(self):
+        assert _has_absent_state({"path": {"type": "str"}}) is False
+
+    def test_returns_false_when_absent_not_in_choices(self):
+        options = {"state": {"type": "str", "choices": ["present", "latest"]}}
+        assert _has_absent_state(options) is False
+
+    def test_returns_false_when_choices_empty(self):
+        options = {"state": {"type": "str", "choices": []}}
+        assert _has_absent_state(options) is False
+
+    def test_returns_false_when_state_not_a_dict(self):
+        assert _has_absent_state({"state": "present"}) is False
+
+    def test_returns_false_when_choices_not_a_list(self):
+        options = {"state": {"type": "str", "choices": "present/absent"}}
+        assert _has_absent_state(options) is False
 
 
 # ---------------------------------------------------------------------------
@@ -117,11 +200,10 @@ class TestBuildSchema:
         assert {"id", "host_id", "changed", "triggers"} <= names
 
     def test_framework_names_excluded_from_options(self):
-        # If a module happens to declare 'id' or 'changed' as an option, skip it
         options = {"id": {"type": "str"}, "path": {"type": "str"}}
         schema, _ = _build_schema(options, {})
         names = [a.name for a in schema.attributes]
-        assert names.count("id") == 1  # only the framework id, not duplicated
+        assert names.count("id") == 1
 
     def test_type_mapping(self):
         options = {
@@ -136,8 +218,6 @@ class TestBuildSchema:
         assert isinstance(attr_map["data"].type, NormalizedJson)
 
     def test_return_names_excludes_option_names(self):
-        # Fields in both options and returns are NOT in return_names
-        # (the resource keeps the user's value, not Ansible's echo)
         options = {"path": {"type": "str"}}
         returns = {"path": {"type": "str"}, "uid": {"type": "int"}}
         _, return_names = _build_schema(options, returns)
@@ -178,6 +258,72 @@ class TestBuildDatasourceSchema:
 
 
 # ---------------------------------------------------------------------------
+# _build_ephemeral_schema
+# ---------------------------------------------------------------------------
+
+
+class TestBuildEphemeralSchema:
+    def test_has_host_id(self):
+        schema, _ = _build_ephemeral_schema({}, {})
+        names = {a.name for a in schema.attributes}
+        assert "host_id" in names
+
+    def test_no_state_concepts(self):
+        schema, _ = _build_ephemeral_schema({}, {})
+        names = {a.name for a in schema.attributes}
+        assert "id" not in names
+        assert "changed" not in names
+        assert "triggers" not in names
+        assert "changed_when" not in names
+
+    def test_no_async_attrs(self):
+        schema, _ = _build_ephemeral_schema({}, {})
+        names = {a.name for a in schema.attributes}
+        assert "async_seconds" not in names
+        assert "poll_interval" not in names
+
+    def test_has_execution_context_attrs(self):
+        schema, _ = _build_ephemeral_schema({}, {})
+        names = {a.name for a in schema.attributes}
+        expected = {"timeout", "ignore_errors", "failed_when", "environment", "tags", "skip_tags", "delegate_to_id"}
+        assert expected <= names
+
+    def test_options_included(self):
+        options = {"cmd": {"type": "str", "required": True}}
+        schema, _ = _build_ephemeral_schema(options, {})
+        names = {a.name for a in schema.attributes}
+        assert "cmd" in names
+
+    def test_return_only_computed(self):
+        schema, return_names = _build_ephemeral_schema({}, {"stdout": {"type": "str"}})
+        attr = next(a for a in schema.attributes if a.name == "stdout")
+        assert attr.computed
+        assert "stdout" in return_names
+
+    def test_framework_name_in_options_not_duplicated(self):
+        options = {"host_id": {"type": "str"}, "cmd": {"type": "str"}}
+        schema, _ = _build_ephemeral_schema(options, {})
+        names = [a.name for a in schema.attributes]
+        assert names.count("host_id") == 1
+
+    def test_return_skipped_when_name_is_framework_attr(self):
+        """Returns whose names collide with framework attrs (e.g. 'timeout') are not added."""
+        schema, return_names = _build_ephemeral_schema({}, {"timeout": {"type": "int"}})
+        names = {a.name for a in schema.attributes}
+        # timeout comes from framework attrs, but the return spec should not create a second entry
+        assert names.count("timeout") if isinstance(names, list) else "timeout" in names
+        assert "timeout" not in return_names
+
+    def test_return_skipped_when_name_in_options(self):
+        """Returns whose names shadow an option are not added as separate computed attrs."""
+        options = {"path": {"type": "str", "required": True}}
+        schema, return_names = _build_ephemeral_schema(options, {"path": {"type": "str"}})
+        names = [a.name for a in schema.attributes]
+        assert names.count("path") == 1
+        assert "path" not in return_names
+
+
+# ---------------------------------------------------------------------------
 # make_task_class
 # ---------------------------------------------------------------------------
 
@@ -199,6 +345,15 @@ class TestMakeTaskClass:
         klass = make_task_class("ansible.builtin.ping", {}, {}, check_mode_support="full")
         assert klass._check_mode_support == "full"
 
+    def test_has_state_absent_true(self):
+        options = {"state": {"type": "str", "choices": ["present", "absent"]}}
+        klass = make_task_class("ansible.builtin.file", options, {})
+        assert klass._has_state_absent is True
+
+    def test_has_state_absent_false(self):
+        klass = make_task_class("ansible.builtin.ping", {}, {})
+        assert klass._has_state_absent is False
+
     def test_unique_classes_per_fqcn(self):
         a = make_task_class("ansible.builtin.ping", {}, {})
         b = make_task_class("ansible.builtin.copy", {}, {})
@@ -206,7 +361,6 @@ class TestMakeTaskClass:
         assert a.get_name() != b.get_name()
 
     def test_get_name_closure_is_correct(self):
-        # Classic Python closure-in-loop trap: each class must capture its own name
         classes = [make_task_class(f"ansible.builtin.mod{i}", {}, {}) for i in range(3)]
         names = [c.get_name() for c in classes]
         assert names == [f"mod{i}" for i in range(3)]
@@ -236,6 +390,56 @@ class TestMakeDatasourceClass:
         assert resource is not datasource
         assert not issubclass(resource, TerribleTaskDataSource)
         assert not issubclass(datasource, TerribleTaskBase)
+
+
+# ---------------------------------------------------------------------------
+# make_ephemeral_class
+# ---------------------------------------------------------------------------
+
+
+class TestMakeEphemeralClass:
+    def test_is_subclass_of_ephemeral_resource(self):
+        klass = make_ephemeral_class("ansible.builtin.ping", {}, {})
+        assert issubclass(klass, EphemeralResource)
+
+    def test_name_is_ping(self):
+        klass = make_ephemeral_class("ansible.builtin.ping", {}, {})
+        assert klass.get_name() == "ping"
+
+    def test_module_name_stored(self):
+        klass = make_ephemeral_class("ansible.builtin.ping", {}, {})
+        assert klass._module_name == "ansible.builtin.ping"
+
+    def test_schema_has_no_state_concepts(self):
+        klass = make_ephemeral_class("ansible.builtin.ping", {}, {})
+        names = {a.name for a in klass.get_schema().attributes}
+        assert "id" not in names
+        assert "changed" not in names
+        assert "triggers" not in names
+
+    def test_schema_has_execution_attrs(self):
+        klass = make_ephemeral_class("ansible.builtin.ping", {}, {})
+        names = {a.name for a in klass.get_schema().attributes}
+        assert "host_id" in names
+        assert "timeout" in names
+
+    def test_return_attr_names_set(self):
+        klass = make_ephemeral_class("ansible.builtin.ping", {}, {"stdout": {"type": "str"}})
+        assert "stdout" in klass._return_attr_names
+
+    def test_distinct_from_resource_and_datasource(self):
+        resource = make_task_class("ansible.builtin.ping", {}, {})
+        datasource = make_datasource_class("ansible.builtin.ping", {}, {})
+        ephemeral = make_ephemeral_class("ansible.builtin.ping", {}, {})
+        assert not issubclass(ephemeral, TerribleTaskBase)
+        assert not issubclass(ephemeral, TerribleTaskDataSource)
+        assert ephemeral is not resource
+        assert ephemeral is not datasource
+
+    def test_get_name_closure_correct(self):
+        klasses = [make_ephemeral_class(f"ansible.builtin.mod{i}", {}, {}) for i in range(3)]
+        names = [k.get_name() for k in klasses]
+        assert names == [f"mod{i}" for i in range(3)]
 
 
 # ---------------------------------------------------------------------------
@@ -297,7 +501,7 @@ class TestParseYamlBlock:
 
 
 # ---------------------------------------------------------------------------
-# _coercers_for — Bool branch
+# _coercers_for
 # ---------------------------------------------------------------------------
 
 
@@ -321,14 +525,12 @@ class TestCoercersFor:
 
 class TestBuildDatasourceSchemaExtraBranches:
     def test_framework_name_in_options_is_skipped(self):
-        # "host_id" is a framework name; it must not be duplicated
         options = {"host_id": {"type": "str"}, "path": {"type": "str"}}
         schema, _ = _build_datasource_schema(options, {})
         names = [a.name for a in schema.attributes]
         assert names.count("host_id") == 1
 
     def test_framework_name_in_returns_is_skipped(self):
-        # "host_id" is a framework name; if a module returns it, it must not be added again
         schema, return_names = _build_datasource_schema({}, {"host_id": {"type": "str"}, "rc": {"type": "int"}})
         names = [a.name for a in schema.attributes]
         assert names.count("host_id") == 1
@@ -338,6 +540,14 @@ class TestBuildDatasourceSchemaExtraBranches:
 # ---------------------------------------------------------------------------
 # Cache helpers
 # ---------------------------------------------------------------------------
+
+_CACHE_SCHEMA = """
+    CREATE TABLE discovery_cache (
+        ansible_version TEXT, fqcn TEXT, options_json TEXT,
+        returns_json TEXT, check_mode TEXT, classification TEXT,
+        PRIMARY KEY (ansible_version, fqcn)
+    )
+"""
 
 
 class TestCacheHelpers:
@@ -356,73 +566,128 @@ class TestCacheHelpers:
         finally:
             db.close()
 
-    def test_load_cached_empty_returns_none(self):
-        db = sqlite3.connect(":memory:")
-        db.execute("""
+    def test_open_cache_has_classification_column(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        db = _open_cache()
+        try:
+            cols = [r[1] for r in db.execute("PRAGMA table_info(discovery_cache)").fetchall()]
+            assert "classification" in cols
+        finally:
+            db.close()
+
+    def test_open_cache_migrates_old_schema(self, tmp_path, monkeypatch):
+        """Old 5-column cache gains classification column and is cleared."""
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        db_path = tmp_path / ".cache" / "tf-python-provider" / "discovery.db"
+        db_path.parent.mkdir(parents=True)
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("""
             CREATE TABLE discovery_cache (
                 ansible_version TEXT, fqcn TEXT, options_json TEXT,
                 returns_json TEXT, check_mode TEXT, PRIMARY KEY (ansible_version, fqcn)
             )
         """)
+        conn.execute(
+            "INSERT INTO discovery_cache VALUES (?,?,?,?,?)",
+            ("1.0", "ansible.builtin.ping", "{}", "{}", "none"),
+        )
+        conn.commit()
+        conn.close()
+
+        db = _open_cache()
+        try:
+            cols = [r[1] for r in db.execute("PRAGMA table_info(discovery_cache)").fetchall()]
+            assert "classification" in cols
+            rows = db.execute("SELECT * FROM discovery_cache").fetchall()
+            assert rows == []
+        finally:
+            db.close()
+
+    def test_load_cached_empty_returns_none(self):
+        db = sqlite3.connect(":memory:")
+        db.execute(_CACHE_SCHEMA)
         assert _load_cached(db, "2.99") is None
         db.close()
 
-    def test_load_cached_returns_classes(self):
+    def test_load_cached_returns_resource(self):
         db = sqlite3.connect(":memory:")
-        db.execute("""
-            CREATE TABLE discovery_cache (
-                ansible_version TEXT, fqcn TEXT, options_json TEXT,
-                returns_json TEXT, check_mode TEXT, PRIMARY KEY (ansible_version, fqcn)
-            )
-        """)
+        db.execute(_CACHE_SCHEMA)
         db.execute(
-            "INSERT INTO discovery_cache VALUES (?,?,?,?,?)", ("2.99", "ansible.builtin.ping", "{}", "{}", "full")
+            "INSERT INTO discovery_cache VALUES (?,?,?,?,?,?)",
+            ("2.99", "ansible.builtin.file", "{}", "{}", "none", "resource"),
         )
         db.commit()
-        resources, datasources = _load_cached(db, "2.99")
+        resources, datasources, ephemerals = _load_cached(db, "2.99")
         assert len(resources) == 1
-        assert len(datasources) == 1  # full check mode → also a datasource
+        assert datasources == []
+        assert ephemerals == []
+        db.close()
+
+    def test_load_cached_returns_datasource(self):
+        db = sqlite3.connect(":memory:")
+        db.execute(_CACHE_SCHEMA)
+        db.execute(
+            "INSERT INTO discovery_cache VALUES (?,?,?,?,?,?)",
+            ("2.99", "ansible.builtin.stat", "{}", "{}", "full", "datasource"),
+        )
+        db.commit()
+        resources, datasources, ephemerals = _load_cached(db, "2.99")
+        assert resources == []
+        assert len(datasources) == 1
+        assert ephemerals == []
+        db.close()
+
+    def test_load_cached_returns_ephemeral(self):
+        db = sqlite3.connect(":memory:")
+        db.execute(_CACHE_SCHEMA)
+        db.execute(
+            "INSERT INTO discovery_cache VALUES (?,?,?,?,?,?)",
+            ("2.99", "ansible.builtin.async_status", "{}", "{}", "none", "ephemeral"),
+        )
+        db.commit()
+        resources, datasources, ephemerals = _load_cached(db, "2.99")
+        assert resources == []
+        assert datasources == []
+        assert len(ephemerals) == 1
         db.close()
 
     def test_load_cached_bad_json_skipped(self):
         db = sqlite3.connect(":memory:")
-        db.execute("""
-            CREATE TABLE discovery_cache (
-                ansible_version TEXT, fqcn TEXT, options_json TEXT,
-                returns_json TEXT, check_mode TEXT, PRIMARY KEY (ansible_version, fqcn)
-            )
-        """)
+        db.execute(_CACHE_SCHEMA)
         db.execute(
-            "INSERT INTO discovery_cache VALUES (?,?,?,?,?)", ("2.99", "ansible.builtin.bad", "not json", "{}", "none")
+            "INSERT INTO discovery_cache VALUES (?,?,?,?,?,?)",
+            ("2.99", "ansible.builtin.file", "not json", "{}", "none", "resource"),
         )
         db.commit()
-        resources, datasources = _load_cached(db, "2.99")
+        resources, datasources, ephemerals = _load_cached(db, "2.99")
         assert resources == []
+        db.close()
+
+    def test_load_cached_invalidated_on_classification_change(self):
+        db = sqlite3.connect(":memory:")
+        db.execute(_CACHE_SCHEMA)
+        db.execute(
+            "INSERT INTO discovery_cache VALUES (?,?,?,?,?,?)",
+            ("2.99", "ansible.builtin.command", "{}", "{}", "partial", "ephemeral"),
+        )
+        db.commit()
+        assert _load_cached(db, "2.99") is None
         db.close()
 
     def test_save_cache_inserts_rows(self):
         db = sqlite3.connect(":memory:")
-        db.execute("""
-            CREATE TABLE discovery_cache (
-                ansible_version TEXT, fqcn TEXT, options_json TEXT,
-                returns_json TEXT, check_mode TEXT, PRIMARY KEY (ansible_version, fqcn)
-            )
-        """)
-        _save_cache(db, "2.99", [("2.99", "ansible.builtin.ping", "{}", "{}", "none")])
+        db.execute(_CACHE_SCHEMA)
+        _save_cache(db, "2.99", [("2.99", "ansible.builtin.file", "{}", "{}", "none", "resource")])
         rows = db.execute("SELECT fqcn FROM discovery_cache").fetchall()
-        assert rows == [("ansible.builtin.ping",)]
+        assert rows == [("ansible.builtin.file",)]
         db.close()
 
     def test_save_cache_deletes_stale_versions(self):
         db = sqlite3.connect(":memory:")
-        db.execute("""
-            CREATE TABLE discovery_cache (
-                ansible_version TEXT, fqcn TEXT, options_json TEXT,
-                returns_json TEXT, check_mode TEXT, PRIMARY KEY (ansible_version, fqcn)
-            )
-        """)
+        db.execute(_CACHE_SCHEMA)
         db.execute(
-            "INSERT INTO discovery_cache VALUES (?,?,?,?,?)", ("1.0", "ansible.builtin.ping", "{}", "{}", "none")
+            "INSERT INTO discovery_cache VALUES (?,?,?,?,?,?)",
+            ("1.0", "ansible.builtin.file", "{}", "{}", "none", "resource"),
         )
         db.commit()
         _save_cache(db, "2.99", [])
@@ -442,11 +707,12 @@ class TestDiscoverTaskResources:
         db_mock = MagicMock()
         with (
             patch("terrible_provider.discovery._open_cache", return_value=db_mock),
-            patch("terrible_provider.discovery._load_cached", return_value=([fake_class], [])),
+            patch("terrible_provider.discovery._load_cached", return_value=([fake_class], [], [])),
         ):
-            resources, datasources = discover_task_resources()
+            resources, datasources, ephemerals = discover_task_resources()
         assert resources == [fake_class]
         assert datasources == []
+        assert ephemerals == []
 
     def test_cache_miss_empty_walk(self):
         db_mock = MagicMock()
@@ -458,9 +724,10 @@ class TestDiscoverTaskResources:
             patch("terrible_provider.discovery._save_cache") as mock_save,
             patch.object(loader.module_loader, "all", return_value=[]),
         ):
-            resources, datasources = discover_task_resources()
+            resources, datasources, ephemerals = discover_task_resources()
         assert resources == []
         assert datasources == []
+        assert ephemerals == []
         mock_save.assert_not_called()
 
     def test_cache_open_exception_still_walks(self):
@@ -470,14 +737,15 @@ class TestDiscoverTaskResources:
             patch("terrible_provider.discovery._open_cache", side_effect=Exception("disk full")),
             patch.object(loader.module_loader, "all", return_value=[]),
         ):
-            resources, datasources = discover_task_resources()
+            resources, datasources, ephemerals = discover_task_resources()
         assert resources == []
 
     def test_ansible_not_importable(self, monkeypatch):
         monkeypatch.setitem(sys.modules, "ansible", None)
-        resources, datasources = discover_task_resources()
+        resources, datasources, ephemerals = discover_task_resources()
         assert resources == []
         assert datasources == []
+        assert ephemerals == []
 
     def test_cache_load_raises_closes_db(self):
         db_mock = MagicMock()
@@ -503,10 +771,10 @@ class TestDiscoverTaskResources:
         ):
             discover_task_resources()  # Must not raise despite close failing
 
-    def test_walk_valid_module_full_check_mode(self, tmp_path):
+    def test_walk_resource_module(self, tmp_path):
         mod_dir = tmp_path / "ansible" / "modules"
         mod_dir.mkdir(parents=True)
-        (mod_dir / "fakemod.py").write_text(_FAKE_MODULE_FULL)
+        (mod_dir / "file.py").write_text(_FAKE_MODULE)
         db_mock = MagicMock()
         import ansible.plugins.loader as loader
 
@@ -514,39 +782,84 @@ class TestDiscoverTaskResources:
             patch("terrible_provider.discovery._open_cache", return_value=db_mock),
             patch("terrible_provider.discovery._load_cached", return_value=None),
             patch("terrible_provider.discovery._save_cache") as mock_save,
-            patch.object(loader.module_loader, "all", return_value=[str(mod_dir / "fakemod.py")]),
+            patch.object(loader.module_loader, "all", return_value=[str(mod_dir / "file.py")]),
         ):
-            resources, datasources = discover_task_resources()
+            resources, datasources, ephemerals = discover_task_resources()
         assert len(resources) == 1
-        assert resources[0].get_name() == "fakemod"
-        assert len(datasources) == 1
+        assert resources[0].get_name() == "file"
+        assert datasources == []
+        assert ephemerals == []
         mock_save.assert_called_once()
 
-    def test_walk_module_no_check_mode(self, tmp_path):
+    def test_walk_datasource_module(self, tmp_path):
         mod_dir = tmp_path / "ansible" / "modules"
         mod_dir.mkdir(parents=True)
-        (mod_dir / "nocheck.py").write_text(_FAKE_MODULE_NONE)
+        (mod_dir / "stat.py").write_text(_FAKE_MODULE)
         import ansible.plugins.loader as loader
 
         with (
             patch("terrible_provider.discovery._open_cache", side_effect=Exception("no cache")),
-            patch.object(loader.module_loader, "all", return_value=[str(mod_dir / "nocheck.py")]),
+            patch.object(loader.module_loader, "all", return_value=[str(mod_dir / "stat.py")]),
         ):
-            resources, datasources = discover_task_resources()
-        assert len(resources) == 1
+            resources, datasources, ephemerals = discover_task_resources()
+        assert resources == []
+        assert len(datasources) == 1
+        assert datasources[0].get_name() == "stat"
+        assert ephemerals == []
+
+    def test_walk_ephemeral_module(self, tmp_path):
+        mod_dir = tmp_path / "ansible" / "modules"
+        mod_dir.mkdir(parents=True)
+        (mod_dir / "async_status.py").write_text(_FAKE_MODULE)
+        import ansible.plugins.loader as loader
+
+        with (
+            patch("terrible_provider.discovery._open_cache", side_effect=Exception("no cache")),
+            patch.object(loader.module_loader, "all", return_value=[str(mod_dir / "async_status.py")]),
+        ):
+            resources, datasources, ephemerals = discover_task_resources()
+        assert resources == []
         assert datasources == []
+        assert len(ephemerals) == 1
+        assert ephemerals[0].get_name() == "async_status"
+
+    def test_walk_skips_internal_module(self, tmp_path):
+        mod_dir = tmp_path / "ansible" / "modules"
+        mod_dir.mkdir(parents=True)
+        (mod_dir / "debug.py").write_text(_FAKE_MODULE)
+        import ansible.plugins.loader as loader
+
+        with (
+            patch("terrible_provider.discovery._open_cache", side_effect=Exception("no cache")),
+            patch.object(loader.module_loader, "all", return_value=[str(mod_dir / "debug.py")]),
+        ):
+            resources, datasources, ephemerals = discover_task_resources()
+        assert resources == [] and datasources == [] and ephemerals == []
+
+    def test_walk_skips_unclassified_module(self, tmp_path):
+        mod_dir = tmp_path / "ansible" / "modules"
+        mod_dir.mkdir(parents=True)
+        (mod_dir / "nomod.py").write_text(_FAKE_MODULE)
+        import ansible.plugins.loader as loader
+
+        with (
+            patch("terrible_provider.discovery._open_cache", side_effect=Exception("no cache")),
+            patch.object(loader.module_loader, "all", return_value=[str(mod_dir / "nomod.py")]),
+        ):
+            resources, datasources, ephemerals = discover_task_resources()
+        assert resources == [] and datasources == [] and ephemerals == []
 
     def test_walk_skips_underscore_files(self, tmp_path):
         mod_dir = tmp_path / "ansible" / "modules"
         mod_dir.mkdir(parents=True)
-        (mod_dir / "_private.py").write_text(_FAKE_MODULE_FULL)
+        (mod_dir / "_private.py").write_text(_FAKE_MODULE)
         import ansible.plugins.loader as loader
 
         with (
             patch("terrible_provider.discovery._open_cache", side_effect=Exception("no cache")),
             patch.object(loader.module_loader, "all", return_value=[str(mod_dir / "_private.py")]),
         ):
-            resources, _ = discover_task_resources()
+            resources, _, _ = discover_task_resources()
         assert resources == []
 
     def test_walk_skips_non_py_and_empty_paths(self, tmp_path):
@@ -556,67 +869,66 @@ class TestDiscoverTaskResources:
             patch("terrible_provider.discovery._open_cache", side_effect=Exception("no cache")),
             patch.object(loader.module_loader, "all", return_value=["", None, "/some/file.pyc"]),
         ):
-            resources, _ = discover_task_resources()
+            resources, _, _ = discover_task_resources()
         assert resources == []
 
     def test_walk_skips_unrecognized_paths(self, tmp_path):
-        unknown = tmp_path / "random" / "place" / "mymod.py"
+        unknown = tmp_path / "random" / "place" / "file.py"
         unknown.parent.mkdir(parents=True)
-        unknown.write_text(_FAKE_MODULE_FULL)
+        unknown.write_text(_FAKE_MODULE)
         import ansible.plugins.loader as loader
 
         with (
             patch("terrible_provider.discovery._open_cache", side_effect=Exception("no cache")),
             patch.object(loader.module_loader, "all", return_value=[str(unknown)]),
         ):
-            resources, _ = discover_task_resources()
+            resources, _, _ = discover_task_resources()
         assert resources == []
 
     def test_walk_skips_oserror_on_open(self, tmp_path):
-        # File path matches fqcn regex but doesn't exist → OSError on open → skip
         mod_dir = tmp_path / "ansible" / "modules"
         mod_dir.mkdir(parents=True)
-        nonexistent = str(mod_dir / "ghost.py")
+        nonexistent = str(mod_dir / "file.py")
         import ansible.plugins.loader as loader
 
         with (
             patch("terrible_provider.discovery._open_cache", side_effect=Exception("no cache")),
             patch.object(loader.module_loader, "all", return_value=[nonexistent]),
         ):
-            resources, _ = discover_task_resources()
+            resources, _, _ = discover_task_resources()
         assert resources == []
 
     def test_walk_skips_modules_without_docs(self, tmp_path):
         mod_dir = tmp_path / "ansible" / "modules"
         mod_dir.mkdir(parents=True)
-        (mod_dir / "nodoc.py").write_text("# No documentation block here\n")
+        (mod_dir / "file.py").write_text("# No documentation block here\n")
         import ansible.plugins.loader as loader
 
         with (
             patch("terrible_provider.discovery._open_cache", side_effect=Exception("no cache")),
-            patch.object(loader.module_loader, "all", return_value=[str(mod_dir / "nodoc.py")]),
+            patch.object(loader.module_loader, "all", return_value=[str(mod_dir / "file.py")]),
         ):
-            resources, _ = discover_task_resources()
+            resources, _, _ = discover_task_resources()
         assert resources == []
 
     def test_walk_handles_make_task_class_exception(self, tmp_path):
         mod_dir = tmp_path / "ansible" / "modules"
         mod_dir.mkdir(parents=True)
-        (mod_dir / "badmod.py").write_text(_FAKE_MODULE_FULL)
+        (mod_dir / "file.py").write_text(_FAKE_MODULE)
         import ansible.plugins.loader as loader
 
         with (
             patch("terrible_provider.discovery._open_cache", side_effect=Exception("no cache")),
-            patch.object(loader.module_loader, "all", return_value=[str(mod_dir / "badmod.py")]),
+            patch.object(loader.module_loader, "all", return_value=[str(mod_dir / "file.py")]),
             patch("terrible_provider.discovery.make_task_class", side_effect=ValueError("bad class")),
         ):
-            resources, _ = discover_task_resources()
+            resources, _, _ = discover_task_resources()
         assert resources == []
 
     def test_save_cache_exception_handled(self, tmp_path):
         mod_dir = tmp_path / "ansible" / "modules"
         mod_dir.mkdir(parents=True)
-        (mod_dir / "goodmod.py").write_text(_FAKE_MODULE_FULL)
+        (mod_dir / "file.py").write_text(_FAKE_MODULE)
         db_mock = MagicMock()
         import ansible.plugins.loader as loader
 
@@ -624,7 +936,7 @@ class TestDiscoverTaskResources:
             patch("terrible_provider.discovery._open_cache", return_value=db_mock),
             patch("terrible_provider.discovery._load_cached", return_value=None),
             patch("terrible_provider.discovery._save_cache", side_effect=Exception("disk full")),
-            patch.object(loader.module_loader, "all", return_value=[str(mod_dir / "goodmod.py")]),
+            patch.object(loader.module_loader, "all", return_value=[str(mod_dir / "file.py")]),
         ):
             discover_task_resources()  # Must not raise
 
@@ -733,7 +1045,6 @@ class TestIterCollectionModulePaths:
         mod = tmp_path / "ansible_collections" / "community" / "general" / "plugins" / "modules"
         mod.mkdir(parents=True)
         (mod / "mymod.py").write_text("")
-        # Same path listed twice — should yield once.
         result = list(_iter_collection_module_paths([str(tmp_path), str(tmp_path)]))
         assert len(result) == 1
 

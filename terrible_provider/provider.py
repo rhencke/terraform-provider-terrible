@@ -16,10 +16,11 @@ class TerribleProvider(Provider):
         self._state: dict[str, dict] = {}
         self._task_resources: list | None = None
         self._task_datasources: list | None = None
+        self._task_ephemerals: list | None = None
 
     def _ensure_discovered(self):
         if self._task_resources is None:
-            self._task_resources, self._task_datasources = discover_task_resources()
+            self._task_resources, self._task_datasources, self._task_ephemerals = discover_task_resources()
 
     def get_model_prefix(self) -> str:
         return "terrible_"
@@ -45,4 +46,5 @@ class TerribleProvider(Provider):
         return [TerribleHost, *self._task_resources]  # type: ignore[misc]
 
     def get_ephemeral_resources(self) -> list:
-        return [TerribleEphemeralPing]
+        self._ensure_discovered()
+        return [TerribleEphemeralPing, *self._task_ephemerals]  # type: ignore[misc]

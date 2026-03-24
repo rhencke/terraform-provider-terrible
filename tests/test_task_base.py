@@ -237,6 +237,39 @@ class TestCRUD:
         inst = klass(prov)
         inst.delete(_ctx(DeleteContext), {"id": "rid"})  # should not raise
 
+    def test_delete_runs_absent_when_has_state_absent(self):
+        """When _has_state_absent=True, delete() should run the module with state=absent."""
+        klass = _make_class(options={"state": {"choices": ["present", "absent"]}})
+        assert klass._has_state_absent is True
+        prov = _provider(state={"h1": {"host": "127.0.0.1", "connection": "local"}})
+        inst = klass(prov)
+        current = {"id": "rid", "host_id": "h1", "state": "present"}
+        with patch("terrible_provider.task_base._run_module", return_value={"changed": True}) as mock_run:
+            inst.delete(_ctx(DeleteContext), current)
+        args_str = mock_run.call_args[0][2]
+        assert '"state": "absent"' in args_str or "state=absent" in args_str
+
+    def test_delete_is_noop_when_no_state_absent(self):
+        """When _has_state_absent=False, delete() should remain a no-op."""
+        klass = _make_class(options={"state": {"choices": ["present"]}})
+        assert klass._has_state_absent is False
+        prov = _provider(state={"h1": {"host": "127.0.0.1", "connection": "local"}})
+        inst = klass(prov)
+        current = {"id": "rid", "host_id": "h1"}
+        with patch("terrible_provider.task_base._run_module") as mock_run:
+            inst.delete(_ctx(DeleteContext), current)
+        mock_run.assert_not_called()
+
+    def test_delete_skips_run_when_host_not_found(self):
+        """delete() should not call _run_module when host_id is not in state."""
+        klass = _make_class(options={"state": {"choices": ["present", "absent"]}})
+        prov = _provider(state={})  # no hosts registered
+        inst = klass(prov)
+        current = {"id": "rid", "host_id": "h1", "state": "present"}
+        with patch("terrible_provider.task_base._run_module") as mock_run:
+            inst.delete(_ctx(DeleteContext), current)
+        mock_run.assert_not_called()
+
     def test_import_returns_by_id(self):
         klass = _make_class()
         prov = _provider(state={"rid": {"id": "rid", "host_id": "h1"}})

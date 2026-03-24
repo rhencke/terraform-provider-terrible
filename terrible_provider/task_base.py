@@ -360,6 +360,7 @@ class TerribleTaskBase(Resource):
     _return_attr_names: set[str] = set()
     _return_attr_coercers: dict = {}
     _check_mode_support: str = "none"
+    _has_state_absent: bool = False
 
     def __init__(self, provider):
         self._prov = provider
@@ -507,7 +508,23 @@ class TerribleTaskBase(Resource):
         return {**planned, **return_attrs, "id": current["id"], "changed": changed}
 
     def delete(self, ctx: DeleteContext, current: dict):
-        pass
+        if not self.__class__._has_state_absent:
+            return
+        host = self._resolve_host(current["host_id"], ctx.diagnostics)
+        if host is None:
+            return
+        absent_state = {**current, "state": "absent"}
+        args_str = _build_args_str(absent_state)
+        _run_module(
+            host,
+            self.__class__._module_name,
+            args_str,
+            timeout=current.get("timeout"),
+            failed_when=current.get("failed_when"),
+            environment=current.get("environment"),
+            tags=current.get("tags"),
+            skip_tags=current.get("skip_tags"),
+        )
 
     def import_(self, ctx: ImportContext, id: str) -> dict | None:
         return self._prov._state.get(id)
