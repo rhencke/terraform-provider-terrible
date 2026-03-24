@@ -29,6 +29,119 @@ log = logging.getLogger(__name__)
 _ANSIBLE_BUILTIN_MODULES = re.compile(r".+/ansible/modules$")
 _COLLECTION_MODULES = re.compile(r".+/ansible_collections/([^/]+)/([^/]+)/plugins/modules$")
 
+# ---------------------------------------------------------------------------
+# Per-module classification for ansible.builtin.*
+#
+# Each entry maps the short name (after "ansible.builtin.") to a frozenset of
+# Terraform type(s) to expose: "resource", "datasource", "ephemeral".
+# An empty frozenset means the module is internal and not exported at all.
+# ---------------------------------------------------------------------------
+
+_NONE = frozenset()
+_R = frozenset({"resource"})
+_D = frozenset({"datasource"})
+_E = frozenset({"ephemeral"})
+_RE = frozenset({"resource", "ephemeral"})
+_RDE = frozenset({"resource", "datasource", "ephemeral"})
+
+_BUILTIN_CLASSIFICATION: dict[str, frozenset[str]] = {
+    # --- Internal: no Terraform analog ---
+    "debug": _NONE,  # action plugin, connection: none
+    "assert": _NONE,  # action plugin, connection: none
+    "fail": _NONE,  # action plugin, connection: none
+    "set_fact": _NONE,  # sets in-memory Ansible vars only
+    "pause": _NONE,  # requires TTY, connection: none
+    "meta": _NONE,  # Ansible execution control (flush_handlers etc.)
+    "include_vars": _NONE,  # loads YAML into in-memory Ansible store
+    "add_host": _NONE,  # adds to in-memory Ansible inventory only
+    "group_by": _NONE,  # mutates in-memory Ansible groups only
+    "set_stats": _NONE,  # sets Ansible stats for callback plugins
+    "validate_argument_spec": _NONE,  # validates role arg specs, no host state
+    "import_playbook": _NONE,  # Ansible play-level directive
+    "import_role": _NONE,  # Ansible play-level directive
+    "import_tasks": _NONE,  # Ansible play-level directive
+    "include_role": _NONE,  # Ansible play-level directive
+    "include_tasks": _NONE,  # Ansible play-level directive
+    "async_wrapper": _NONE,  # internal async executor, not user-facing
+    "gather_facts": _NONE,  # action plugin wrapper around setup, no main()
+    # --- Ephemeral: one-shot execution, no persistent host state ---
+    "ping": _RDE,  # connectivity test: resource + datasource + ephemeral
+    "command": _RE,  # used in legacy resource style and ephemeral modern APIs
+    "shell": _RE,  # delegates to command with _uses_shell=True
+    "raw": _RE,  # virtual module, entirely server-side
+    "script": _RE,  # virtual module, runs local script on remote
+    "expect": _RE,  # pexpect-based; always changed=True
+    "reboot": _RE,  # one-shot reboot event; no state
+    "wait_for": _RE,  # polling operation; no host state modified
+    "wait_for_connection": _RE,  # polls connection availability; no state
+    "tempfile": _RE,  # mkstemp/mkdtemp; always changed=True; no lifecycle
+    "uri": _RE,  # HTTP client; fire-and-forget; not idempotent by default
+    "fetch": _RE,  # virtual; copies remote→controller fs; no remote state
+    "async_status": _E,  # reads async job state; tied to job lifetime not host
+    # --- Datasource: purely read-only, no side effects ---
+    "stat": _D,  # pure os.stat; always changed=False
+    "slurp": _D,  # reads file content; always changed=False
+    "find": _D,  # pure os.walk/glob; always changed=False
+    "getent": _D,  # reads system databases (passwd, group, etc.); read-only
+    "package_facts": _D,  # returns installed package info; read-only
+    "service_facts": _D,  # returns service state; read-only
+    "setup": _D,  # gathers host facts (OS, hardware, network); read-only
+    "mount_facts": _D,  # reads mount info from /proc/mounts etc.; read-only
+    # --- Resource: manages durable host state; idempotent; has state=absent ---
+    # File/content management
+    "file": _R,  # manages files, dirs, symlinks; state=absent deletes
+    "copy": _R,  # copies content to remote; idempotent via checksum
+    "template": _R,  # renders Jinja2 to remote; same semantics as copy
+    "get_url": _R,  # downloads URL to remote file; idempotent via checksum
+    "unarchive": _R,  # extracts archives; idempotent
+    "assemble": _R,  # assembles fragments into a file; idempotent
+    "blockinfile": _R,  # manages marked block in file; state=absent removes
+    "lineinfile": _R,  # manages line in file; state=absent removes
+    "replace": _R,  # regex in-place replacement; idempotent
+    # Package/repository management
+    "apt": _R,  # apt packages; state=absent removes
+    "apt_key": _R,  # apt signing keys; state=absent removes
+    "apt_repository": _R,  # apt repo sources; state=absent removes
+    "deb822_repository": _R,  # deb822 apt repo files; state=absent removes
+    "debconf": _R,  # debconf database entries; idempotent
+    "dnf": _R,  # dnf/RPM packages; state=absent removes
+    "dnf5": _R,  # dnf5 packages (Fedora 41+); state=absent removes
+    "dpkg_selections": _R,  # dpkg package selection state; idempotent
+    "pip": _R,  # Python packages; state=absent removes
+    "package": _R,  # generic package manager; state=absent removes
+    "rpm_key": _R,  # RPM signing keys; state=absent removes
+    "yum_repository": _R,  # yum/dnf .repo files; state=absent removes
+    # System configuration
+    "cron": _R,  # cron jobs; state=absent removes
+    "user": _R,  # system users; state=absent removes
+    "group": _R,  # system groups; state=absent removes
+    "hostname": _R,  # system hostname; idempotent
+    "known_hosts": _R,  # ~/.ssh/known_hosts entries; state=absent removes
+    "iptables": _R,  # firewall rules; state=absent removes
+    "service": _R,  # service state/enablement; idempotent
+    "systemd": _R,  # systemd unit state/enablement; idempotent
+    "systemd_service": _R,  # systemd service variant; idempotent
+    "sysvinit": _R,  # SysV init service state; idempotent
+    # Source control
+    "git": _R,  # git repo clones/checkouts; idempotent via HEAD compare
+    "subversion": _R,  # SVN working copies; idempotent
+}
+
+
+def _classify(fqcn: str) -> frozenset[str]:
+    """Return the set of Terraform types to expose for a module FQCN.
+
+    Returns a frozenset containing any combination of "resource", "datasource",
+    "ephemeral". An empty frozenset means the module is not exported at all.
+    Community modules (non-ansible.builtin.*) are not yet classified and return
+    empty, so they are skipped during discovery.
+    """
+    if not fqcn.startswith("ansible.builtin."):
+        return _NONE
+    short = fqcn[len("ansible.builtin.") :]
+    return _BUILTIN_CLASSIFICATION.get(short, _NONE)
+
+
 _TYPE_MAP = {
     "str": String(),
     "string": String(),
@@ -135,6 +248,60 @@ _DS_FRAMEWORK_ATTRS = [
 ]
 _DS_FRAMEWORK_NAMES = {a.name for a in _DS_FRAMEWORK_ATTRS}
 
+# Ephemeral resource framework attributes — execution context only.
+# No id/changed/triggers (no state), no changed_when (no drift), no async (synchronous open).
+_EPHEMERAL_FRAMEWORK_ATTRS = [
+    Attribute(
+        "host_id",
+        String(),
+        description="ID of the `terrible_host` to run this ephemeral resource against",
+        required=True,
+    ),
+    Attribute(
+        "timeout",
+        Number(),
+        description=f"Override the default execution timeout (seconds). Defaults to {_MODULE_TIMEOUT}.",
+        optional=True,
+    ),
+    Attribute(
+        "ignore_errors",
+        Bool(),
+        description="When true, a failed task does not raise a Terraform error.",
+        optional=True,
+    ),
+    Attribute(
+        "failed_when",
+        String(),
+        description="Jinja2 expression that overrides when the task is considered failed.",
+        optional=True,
+    ),
+    Attribute(
+        "environment",
+        NormalizedJson(),
+        description="Environment variables set for the task (dict of name→value).",
+        optional=True,
+    ),
+    Attribute(
+        "tags",
+        NormalizedJson(),
+        description="Run only tasks with these Ansible tags (list of strings).",
+        optional=True,
+    ),
+    Attribute(
+        "skip_tags",
+        NormalizedJson(),
+        description="Skip tasks with these Ansible tags (list of strings).",
+        optional=True,
+    ),
+    Attribute(
+        "delegate_to_id",
+        String(),
+        description="ID of another terrible_host to delegate execution to.",
+        optional=True,
+    ),
+]
+_EPHEMERAL_FRAMEWORK_NAMES = {a.name for a in _EPHEMERAL_FRAMEWORK_ATTRS}
+
 _DOC_RE = re.compile(r"^DOCUMENTATION\s*=\s*[ru]?[\'\"]{3}(.*?)[\'\"]{3}", re.DOTALL | re.MULTILINE)
 _RET_RE = re.compile(r"^RETURN\s*=\s*[ru]?[\'\"]{3}(.*?)[\'\"]{3}", re.DOTALL | re.MULTILINE)
 
@@ -142,6 +309,17 @@ _RET_RE = re.compile(r"^RETURN\s*=\s*[ru]?[\'\"]{3}(.*?)[\'\"]{3}", re.DOTALL | 
 def _check_mode_support(doc: dict) -> str:
     """Return 'full', 'partial', or 'none' from DOCUMENTATION attributes block."""
     return doc.get("attributes", {}).get("check_mode", {}).get("support", "none")
+
+
+def _has_absent_state(options: dict) -> bool:
+    """Return True if the module's 'state' option lists 'absent' as a valid choice."""
+    state_opt = options.get("state", {})
+    if not isinstance(state_opt, dict):
+        return False
+    choices = state_opt.get("choices", [])
+    if isinstance(choices, list):
+        return "absent" in choices
+    return False
 
 
 def _fqcn_for_path(path: str) -> str | None:
@@ -315,6 +493,7 @@ def make_task_class(fqcn: str, options: dict, returns: dict, check_mode_support:
             "_return_attr_names": return_names,
             "_return_attr_coercers": coercers,
             "_check_mode_support": check_mode_support,
+            "_has_state_absent": _has_absent_state(options),
             "get_name": _make_get_name(rname),
         },
     )
@@ -364,6 +543,67 @@ def make_datasource_class(fqcn: str, options: dict, returns: dict) -> type:
     return type(
         f"TerribleDS_{rname}",
         (TerribleTaskDataSource,),
+        {
+            "_module_name": fqcn,
+            "_schema": schema,
+            "_return_attr_names": return_names,
+            "_return_attr_coercers": coercers,
+            "get_name": _make_get_name(rname),
+        },
+    )
+
+
+def _build_ephemeral_schema(options: dict, returns: dict) -> tuple[Schema, set[str]]:
+    """Like _build_schema but for ephemeral resources.
+
+    Uses _EPHEMERAL_FRAMEWORK_ATTRS — no id, changed, triggers, changed_when, or
+    async attrs, because ephemeral resources have no persistent state and always
+    execute fresh on open(). Return values are computed outputs on the result.
+    """
+    option_names = set(options)
+    return_names = {k for k in returns if k not in _EPHEMERAL_FRAMEWORK_NAMES and k not in option_names}
+
+    attrs: list[Attribute] = list(_EPHEMERAL_FRAMEWORK_ATTRS)
+
+    for name, spec in options.items():
+        if name in _EPHEMERAL_FRAMEWORK_NAMES or not isinstance(spec, dict):
+            continue
+        required = bool(spec.get("required", False))
+        attrs.append(
+            Attribute(
+                name,
+                _tf_type_for(spec.get("type", "str")),
+                description=_description(spec),
+                required=required,
+                optional=not required,
+            )
+        )
+
+    for name, spec in returns.items():
+        if name in _EPHEMERAL_FRAMEWORK_NAMES or name in option_names or not isinstance(spec, dict):
+            continue
+        attrs.append(
+            Attribute(
+                name,
+                _tf_type_for(spec.get("type", "str")),
+                description=_description(spec),
+                computed=True,
+            )
+        )
+
+    return Schema(attributes=attrs), return_names
+
+
+def make_ephemeral_class(fqcn: str, options: dict, returns: dict) -> type:
+    """Return a unique EphemeralResource subclass for an Ansible task type."""
+    from .ephemeral import EphemeralResource
+
+    rname = _resource_name_for(fqcn)
+    schema, return_names = _build_ephemeral_schema(options, returns)
+    coercers = _coercers_for(schema, return_names)
+    return type(
+        f"TerribleEph_{rname}",
+        (EphemeralResource,),
         {
             "_module_name": fqcn,
             "_schema": schema,
@@ -458,51 +698,79 @@ def _open_cache() -> sqlite3.Connection:
             options_json    TEXT NOT NULL,
             returns_json    TEXT NOT NULL,
             check_mode      TEXT NOT NULL,
+            classification  TEXT NOT NULL DEFAULT 'resource',
             PRIMARY KEY (ansible_version, fqcn)
         )
     """)
     db.commit()
+    # Migrate old schema (5-column) by adding the classification column.
+    # If the column is newly added all old rows had wrong classifications,
+    # so clear them to force re-discovery with correct types.
+    try:
+        db.execute("ALTER TABLE discovery_cache ADD COLUMN classification TEXT NOT NULL DEFAULT 'resource'")
+        db.execute("DELETE FROM discovery_cache")
+        db.commit()
+    except sqlite3.OperationalError:
+        pass  # column already exists — cache is up to date
     return db
 
 
-def _load_cached(db: sqlite3.Connection, ansible_version: str) -> tuple[list[type], list[type]] | None:
-    rows = db.execute(
-        "SELECT fqcn, options_json, returns_json, check_mode FROM discovery_cache WHERE ansible_version = ?",
-        (ansible_version,),
-    ).fetchall()
+def _load_cached(db: sqlite3.Connection, ansible_version: str) -> tuple[list[type], list[type], list[type]] | None:
+    _SQL = (
+        "SELECT fqcn, options_json, returns_json, check_mode, classification"
+        " FROM discovery_cache WHERE ansible_version = ?"
+    )
+    rows = db.execute(_SQL, (ansible_version,)).fetchall()
     if not rows:
         return None
     resources = []
     datasources = []
-    for fqcn, options_json, returns_json, check_mode in rows:
+    ephemerals = []
+    for fqcn, options_json, returns_json, check_mode, classification in rows:
         try:
             options = json.loads(options_json)
             returns = json.loads(returns_json)
-            klass = make_task_class(fqcn, options, returns, check_mode)
-            resources.append(klass)
-            if check_mode == "full":
+            cached_types = frozenset(c for c in classification.split(",") if c)
+            current_types = _classify(fqcn)
+            if cached_types != current_types:
+                log.debug(
+                    "Discovery cache classification mismatch for %s: cached=%s current=%s",
+                    fqcn,
+                    cached_types,
+                    current_types,
+                )
+                return None
+            if "resource" in cached_types:
+                resources.append(make_task_class(fqcn, options, returns, check_mode))
+            if "datasource" in cached_types:
                 datasources.append(make_datasource_class(fqcn, options, returns))
+            if "ephemeral" in cached_types:
+                ephemerals.append(make_ephemeral_class(fqcn, options, returns))
         except Exception as exc:
             log.debug("Failed to restore cached class for %s: %s", fqcn, exc)
-    return resources, datasources
+    return resources, datasources, ephemerals
 
 
 def _save_cache(db: sqlite3.Connection, ansible_version: str, rows: list[tuple]) -> None:
     # Drop stale entries for other Ansible versions to keep the DB small.
     db.execute("DELETE FROM discovery_cache WHERE ansible_version != ?", (ansible_version,))
     db.executemany(
-        "INSERT OR REPLACE INTO discovery_cache VALUES (?, ?, ?, ?, ?)",
+        "INSERT OR REPLACE INTO discovery_cache VALUES (?, ?, ?, ?, ?, ?)",
         rows,
     )
     db.commit()
 
 
-def discover_task_resources() -> tuple[list[type], list[type]]:
+def discover_task_resources() -> tuple[list[type], list[type], list[type]]:
     """
-    Walk all Ansible module paths and return (resources, datasources).
+    Walk all Ansible builtin module paths and return (resources, datasources, ephemerals).
 
-    resources   — one Resource subclass per discovered task type
-    datasources — one DataSource subclass for each module with check_mode == "full"
+    resources   — Resource subclasses for modules that manage durable host state
+    datasources — DataSource subclasses for purely read-only modules
+    ephemerals  — EphemeralResource subclasses for one-shot execution modules
+
+    Modules with no classification (internal Ansible modules, community modules not
+    yet classified) are silently skipped.
 
     Results are cached in SQLite (~/.cache/tf-python-provider/discovery.db)
     keyed by Ansible version, so the expensive filesystem walk and YAML
@@ -513,7 +781,7 @@ def discover_task_resources() -> tuple[list[type], list[type]]:
         from ansible.plugins.loader import module_loader
     except ImportError:
         log.warning("ansible not importable; no task resources will be registered")
-        return [], []
+        return [], [], []
 
     ansible_version = ansible.__version__
 
@@ -522,14 +790,15 @@ def discover_task_resources() -> tuple[list[type], list[type]]:
         db = _open_cache()
         cached = _load_cached(db, ansible_version)
         if cached is not None:
-            resources, datasources = cached
+            resources, datasources, ephemerals = cached
             log.info(
-                "Loaded %d Ansible task types (%d data sources) from cache (ansible %s)",
+                "Loaded %d resources, %d datasources, %d ephemerals from cache (ansible %s)",
                 len(resources),
                 len(datasources),
+                len(ephemerals),
                 ansible_version,
             )
-            return resources, datasources
+            return resources, datasources, ephemerals
     except Exception as exc:
         log.debug("Discovery cache unavailable: %s", exc)
         if db is not None:
@@ -540,6 +809,7 @@ def discover_task_resources() -> tuple[list[type], list[type]]:
     # Cache miss — do the full filesystem walk.
     resources: list[type] = []
     datasources: list[type] = []
+    ephemerals: list[type] = []
     cache_rows: list[tuple] = []
     seen_fqcns: set[str] = set()
 
@@ -552,6 +822,10 @@ def discover_task_resources() -> tuple[list[type], list[type]]:
             if fqcn is None or fqcn in seen_fqcns:
                 continue
             seen_fqcns.add(fqcn)
+
+            types = _classify(fqcn)
+            if not types:
+                continue
 
             try:
                 with open(path, encoding="utf-8", errors="replace") as f:
@@ -566,19 +840,30 @@ def discover_task_resources() -> tuple[list[type], list[type]]:
             options = doc.get("options") or {}
             returns = _parse_yaml_block(source, _RET_RE) or {}
             support = _check_mode_support(doc)
+            classification = ",".join(sorted(types))
 
             try:
-                klass = make_task_class(fqcn, options, returns, check_mode_support=support)
-                resources.append(klass)
-                cache_rows.append((ansible_version, fqcn, json.dumps(options), json.dumps(returns), support))
-                log.debug("Registered task type: %s", fqcn)
-                if support == "full":
+                if "resource" in types:
+                    resources.append(make_task_class(fqcn, options, returns, check_mode_support=support))
+                    log.debug("Registered resource: %s", fqcn)
+                if "datasource" in types:
                     datasources.append(make_datasource_class(fqcn, options, returns))
-                    log.debug("Registered data source type: %s", fqcn)
+                    log.debug("Registered datasource: %s", fqcn)
+                if "ephemeral" in types:
+                    ephemerals.append(make_ephemeral_class(fqcn, options, returns))
+                    log.debug("Registered ephemeral: %s", fqcn)
+                cache_rows.append(
+                    (ansible_version, fqcn, json.dumps(options), json.dumps(returns), support, classification)
+                )
             except Exception as exc:
                 log.debug("Failed to build class for %s: %s", fqcn, exc)
 
-        log.info("Discovered %d Ansible task types (%d data sources)", len(resources), len(datasources))
+        log.info(
+            "Discovered %d resources, %d datasources, %d ephemerals",
+            len(resources),
+            len(datasources),
+            len(ephemerals),
+        )
 
         if db is not None and cache_rows:
             try:
@@ -591,4 +876,4 @@ def discover_task_resources() -> tuple[list[type], list[type]]:
             with contextlib.suppress(Exception):
                 db.close()
 
-    return resources, datasources
+    return resources, datasources, ephemerals

@@ -25,7 +25,8 @@ class TestGetResourcesAndDataSources:
         prov = TerribleProvider.__new__(TerribleProvider)
         prov._task_resources = None
         prov._task_datasources = None
-        with patch("terrible_provider.provider.discover_task_resources", return_value=([], [])):
+        prov._task_ephemerals = None
+        with patch("terrible_provider.provider.discover_task_resources", return_value=([], [], [])):
             resources = prov.get_resources()
         assert TerribleHost in resources
 
@@ -33,8 +34,9 @@ class TestGetResourcesAndDataSources:
         prov = TerribleProvider.__new__(TerribleProvider)
         prov._task_resources = None
         prov._task_datasources = None
+        prov._task_ephemerals = None
         fake_task = MagicMock()
-        with patch("terrible_provider.provider.discover_task_resources", return_value=([fake_task], [])):
+        with patch("terrible_provider.provider.discover_task_resources", return_value=([fake_task], [], [])):
             resources = prov.get_resources()
         assert fake_task in resources
 
@@ -42,8 +44,9 @@ class TestGetResourcesAndDataSources:
         prov = TerribleProvider.__new__(TerribleProvider)
         prov._task_resources = None
         prov._task_datasources = None
+        prov._task_ephemerals = None
         fake_ds = MagicMock()
-        with patch("terrible_provider.provider.discover_task_resources", return_value=([], [fake_ds])):
+        with patch("terrible_provider.provider.discover_task_resources", return_value=([], [fake_ds], [])):
             datasources = prov.get_data_sources()
         assert fake_ds in datasources
 
@@ -51,13 +54,29 @@ class TestGetResourcesAndDataSources:
         from terrible_provider.ephemeral_ping import TerribleEphemeralPing
 
         prov = TerribleProvider.__new__(TerribleProvider)
-        assert TerribleEphemeralPing in prov.get_ephemeral_resources()
+        prov._task_resources = None
+        prov._task_datasources = None
+        prov._task_ephemerals = None
+        with patch("terrible_provider.provider.discover_task_resources", return_value=([], [], [])):
+            ephemerals = prov.get_ephemeral_resources()
+        assert TerribleEphemeralPing in ephemerals
+
+    def test_get_ephemeral_resources_includes_task_ephemerals(self):
+        prov = TerribleProvider.__new__(TerribleProvider)
+        prov._task_resources = None
+        prov._task_datasources = None
+        prov._task_ephemerals = None
+        fake_eph = MagicMock()
+        with patch("terrible_provider.provider.discover_task_resources", return_value=([], [], [fake_eph])):
+            ephemerals = prov.get_ephemeral_resources()
+        assert fake_eph in ephemerals
 
     def test_get_data_sources_excludes_vault(self):
         prov = TerribleProvider.__new__(TerribleProvider)
         prov._task_resources = None
         prov._task_datasources = None
-        with patch("terrible_provider.provider.discover_task_resources", return_value=([], [])):
+        prov._task_ephemerals = None
+        with patch("terrible_provider.provider.discover_task_resources", return_value=([], [], [])):
             datasources = prov.get_data_sources()
         assert not any(getattr(ds, "__name__", "") == "TerribleVault" for ds in datasources)
 
@@ -65,7 +84,8 @@ class TestGetResourcesAndDataSources:
         prov = TerribleProvider.__new__(TerribleProvider)
         prov._task_resources = None
         prov._task_datasources = None
-        with patch("terrible_provider.provider.discover_task_resources", return_value=([], [])) as mock_disc:
+        prov._task_ephemerals = None
+        with patch("terrible_provider.provider.discover_task_resources", return_value=([], [], [])) as mock_disc:
             prov.get_resources()
             prov.get_resources()
             prov.get_data_sources()
@@ -93,9 +113,10 @@ class TestGetResourcesAndDataSources:
 
 class TestInit:
     def test_init_starts_with_empty_state(self):
-        with patch("terrible_provider.provider.discover_task_resources", return_value=([], [])):
+        with patch("terrible_provider.provider.discover_task_resources", return_value=([], [], [])):
             prov = TerribleProvider()
         assert prov._state == {}
         assert prov._task_resources is None
         assert prov._task_datasources is None
+        assert prov._task_ephemerals is None
         assert not hasattr(prov, "_vault_secrets")  # vault removed

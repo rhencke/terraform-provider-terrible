@@ -163,6 +163,10 @@ Runs:
 1. `uv run pytest tests/ --ignore=tests/integration -q`
 2. `TERRIBLE_INTEGRATION=1 uv run pytest tests/integration/ -q --no-cov`
 
+## Development Practice
+
+- **TDD**: When editing code, write the test first, run it (red), then implement until green. No exceptions.
+
 ## Claude Instructions
 
 - Do not add `Co-Authored-By: Claude` or any Claude/Anthropic attribution to commit messages.

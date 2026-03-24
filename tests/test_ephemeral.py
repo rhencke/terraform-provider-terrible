@@ -57,7 +57,11 @@ class TestEphemeralResource:
         host = {"host": "127.0.0.1", "connection": "local"}
         prov._state = {"h1": host}
         inst = EphemeralResource(prov)
-        inst.__class__ = type("Eph_test", (EphemeralResource,), {"_module_name": "ansible.builtin.ping"})
+        inst.__class__ = type(
+            "Eph_test",
+            (EphemeralResource,),
+            {"_module_name": "ansible.builtin.ping", "_return_attr_names": {"ping"}},
+        )
         diags = Diagnostics()
         with (
             patch("terrible_provider.task_base._run_module", return_value={"ping": "pong"}),
@@ -67,12 +71,68 @@ class TestEphemeralResource:
         assert not diags.has_errors()
         assert result == {"ping": "pong"}
 
+    def test_open_filters_result_by_return_attr_names(self):
+        """open() should only include attrs listed in _return_attr_names, not internal Ansible keys."""
+        prov = MagicMock()
+        host = {"host": "127.0.0.1", "connection": "local"}
+        prov._state = {"h1": host}
+        inst = EphemeralResource(prov)
+        inst.__class__ = type(
+            "Eph_test",
+            (EphemeralResource,),
+            {"_module_name": "ansible.builtin.ping", "_return_attr_names": {"ping"}},
+        )
+        diags = Diagnostics()
+        with (
+            patch(
+                "terrible_provider.task_base._run_module",
+                return_value={"ping": "pong", "changed": False, "_ansible_verbose_always": True},
+            ),
+            patch("terrible_provider.task_base._build_args_str", return_value=""),
+        ):
+            result = inst.open(diags, {"host_id": "h1"})
+        assert result == {"ping": "pong"}
+
+    def test_open_passes_execution_params_to_run_module(self):
+        """open() should forward failed_when, environment, tags, skip_tags, delegate_to_id."""
+        prov = MagicMock()
+        host = {"host": "127.0.0.1", "connection": "local"}
+        delegate_host = {"host": "10.0.0.2", "connection": "local"}
+        prov._state = {"h1": host, "h2": delegate_host}
+        inst = EphemeralResource(prov)
+        inst.__class__ = type(
+            "Eph_test",
+            (EphemeralResource,),
+            {"_module_name": "ansible.builtin.ping", "_return_attr_names": set()},
+        )
+        diags = Diagnostics()
+        config = {
+            "host_id": "h1",
+            "failed_when": "rc != 0",
+            "environment": '{"PATH": "/usr/bin"}',
+            "tags": '["test"]',
+            "skip_tags": '["skip"]',
+            "delegate_to_id": "h2",
+        }
+        with (
+            patch("terrible_provider.task_base._run_module", return_value={}) as mock_run,
+            patch("terrible_provider.task_base._build_args_str", return_value=""),
+        ):
+            inst.open(diags, config)
+        kwargs = mock_run.call_args[1]
+        assert kwargs.get("failed_when") == "rc != 0"
+        assert kwargs.get("environment") == '{"PATH": "/usr/bin"}'
+        assert kwargs.get("tags") == '["test"]'
+        assert kwargs.get("skip_tags") == '["skip"]'
+
     def test_open_adds_error_on_failure(self):
         prov = MagicMock()
         host = {"host": "127.0.0.1", "connection": "local"}
         prov._state = {"h1": host}
         inst = EphemeralResource(prov)
-        inst.__class__ = type("Eph_test", (EphemeralResource,), {"_module_name": "ansible.builtin.ping"})
+        inst.__class__ = type(
+            "Eph_test", (EphemeralResource,), {"_module_name": "ansible.builtin.ping", "_return_attr_names": set()}
+        )
         diags = Diagnostics()
         with (
             patch("terrible_provider.task_base._run_module", return_value={"failed": True, "msg": "boom"}),
@@ -86,7 +146,9 @@ class TestEphemeralResource:
         host = {"host": "127.0.0.1", "connection": "local"}
         prov._state = {"h1": host}
         inst = EphemeralResource(prov)
-        inst.__class__ = type("Eph_test", (EphemeralResource,), {"_module_name": "ansible.builtin.ping"})
+        inst.__class__ = type(
+            "Eph_test", (EphemeralResource,), {"_module_name": "ansible.builtin.ping", "_return_attr_names": set()}
+        )
         diags = Diagnostics()
         with (
             patch("terrible_provider.task_base._run_module", return_value={"failed": True, "msg": "boom"}),
@@ -103,7 +165,7 @@ class TestEphemeralResource:
 
 class TestTerribleEphemeralPing:
     def test_get_name(self):
-        assert TerribleEphemeralPing.get_name() == "terrible_ephemeral_ping"
+        assert TerribleEphemeralPing.get_name() == "ephemeral_ping"
 
     def test_get_schema_returns_schema(self):
         schema = TerribleEphemeralPing.get_schema()
@@ -138,6 +200,7 @@ def _make_servicer(ephemeral_classes=None):
     app.get_ephemeral_resources.return_value = (
         [TerribleEphemeralPing] if ephemeral_classes is None else ephemeral_classes
     )
+    app.get_model_prefix.return_value = "terrible_"
 
     def new_ephemeral_resource(klass):
         return klass(app)
@@ -165,6 +228,17 @@ class TestEphemeralMixin:
         cls_map = svc._load_ephemeral_cls_map()
         assert "terrible_ephemeral_ping" in cls_map
         assert cls_map["terrible_ephemeral_ping"] is TerribleEphemeralPing
+
+    def test_load_ephemeral_cls_map_adds_prefix(self):
+        """Auto-discovered classes with short names get the model prefix applied."""
+        from terrible_provider.discovery import make_ephemeral_class
+
+        klass = make_ephemeral_class("ansible.builtin.ping", {}, {})
+        assert klass.get_name() == "ping"  # short name
+        svc = _make_servicer([klass])
+        cls_map = svc._load_ephemeral_cls_map()
+        assert "terrible_ping" in cls_map
+        assert "ping" not in cls_map
 
     def test_load_ephemeral_cls_map_cached(self):
         svc = _make_servicer([TerribleEphemeralPing])
