@@ -15,7 +15,7 @@ help:
 	@echo "  example-init           - run 'tofu init' in the example project"
 	@echo "  example-apply          - run 'tofu apply' in the example project (interactive)"
 	@echo "  example-fresh          - reinstall provider, wipe state, and auto-apply the example"
-	@echo "  build-binary           - build a standalone PyInstaller binary (terraform-provider-terrible)"
+	@echo "  build-binary           - build a standalone Nuitka binary (terraform-provider-terrible)"
 	@echo "  lint                   - check code with ruff (no fixes)"
 	@echo "  typecheck              - check types with ty"
 	@echo "  format                 - auto-format code with ruff (explicit action)"
@@ -67,7 +67,25 @@ example-fresh: install-provider
 	cd examples/terraform_provider && tofu apply -auto-approve
 
 build-binary:
-	uv run pyinstaller terrible.spec --distpath dist --workpath build/pyinstaller --noconfirm
+	uv run python -m nuitka \
+		--onefile \
+		--assume-yes-for-downloads \
+		--include-package=ansible \
+		--include-package=ansible_collections \
+		--include-package=tf \
+		--include-package=grpc \
+		--include-package=jinja2 \
+		--include-package=cryptography \
+		--include-package=terrible_provider \
+		--include-package=pkg_resources \
+		--include-package-data=ansible \
+		--include-package-data=ansible_collections \
+		--include-package-data=tf \
+		--include-package-data=jinja2 \
+		--include-package-data=cryptography \
+		--output-filename=terraform-provider-terrible \
+		--output-dir=dist \
+		_terrible_main.py
 	@echo "Binary built: ./dist/terraform-provider-terrible"
 
 docs: install-provider
