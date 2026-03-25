@@ -59,8 +59,27 @@ jobs:
         if: "!(matrix.goos == 'linux' && matrix.goarch == 'arm64')"
         run: make integration-test
 
-      - name: Build PyInstaller binary
-        run: uv run pyinstaller terrible.spec --distpath dist --workpath build/pyinstaller --noconfirm
+      - name: Build Nuitka binary
+        run: |
+          uv run python -m nuitka \
+            --onefile \
+            --assume-yes-for-downloads \
+            --include-package=ansible \
+            --include-package=ansible_collections \
+            --include-package=tf \
+            --include-package=grpc \
+            --include-package=jinja2 \
+            --include-package=cryptography \
+            --include-package=terrible_provider \
+            --include-package=pkg_resources \
+            --include-package-data=ansible \
+            --include-package-data=ansible_collections \
+            --include-package-data=tf \
+            --include-package-data=jinja2 \
+            --include-package-data=cryptography \
+            --output-filename=terraform-provider-terrible \
+            --output-dir=dist \
+            _terrible_main.py
 
       - name: Determine binary name and zip path
         id: names

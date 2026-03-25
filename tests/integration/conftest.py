@@ -130,7 +130,8 @@ def provider_install(tmp_path_factory, provider_process):
     tfrc = tmp_path_factory.mktemp("tfrc") / ".terraformrc"
 
     if not _DEV_MODE:
-        tfrc.write_text("provider_installation {\n  direct {}\n}\n")
+        cache_dir = tmp_path_factory.mktemp("plugin-cache")
+        tfrc.write_text(f'plugin_cache_dir = "{cache_dir}"\nprovider_installation {{\n  direct {{}}\n}}\n')
         return {
             "tfrc": tfrc,
             "tf_bin": tf_bin,
