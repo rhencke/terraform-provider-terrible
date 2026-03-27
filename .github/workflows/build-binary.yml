@@ -33,28 +33,10 @@ jobs:
         run: uv sync
 
       - name: Build Nuitka binary
-        run: |
-          uv run python -m nuitka \
-            --onefile \
-            --jobs=1 \
-            --assume-yes-for-downloads \
-            --include-package=ansible \
-            --include-package=ansible_collections \
-            --include-package=tf \
-            --include-package=grpc \
-            --include-package=jinja2 \
-            --include-package=cryptography \
-            --include-package=terrible_provider \
-            --include-package-data=ansible \
-            --include-package-data=ansible_collections \
-            --include-package-data=tf \
-            --include-package-data=jinja2 \
-            --include-package-data=cryptography \
-            --output-filename=terraform-provider-terrible \
-            --output-dir=dist \
-            _terrible_main.py
+        uses: ./.github/actions/build-nuitka
 
       - name: Smoke test binary
         run: |
           ls -lh dist/terraform-provider-terrible
-          timeout 10 dist/terraform-provider-terrible --help || true
+          # Start in dev mode; verify it emits TF_REATTACH_PROVIDERS within 10s
+          timeout 10 dist/terraform-provider-terrible --dev 2>&1 | grep -q TF_REATTACH_PROVIDERS
