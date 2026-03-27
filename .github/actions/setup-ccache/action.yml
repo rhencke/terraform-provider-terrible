@@ -1,0 +1,37 @@
+name: Setup ccache
+description: >
+  Install ccache and restore the Nuitka build cache. The cache is
+  automatically saved at job end if the key was a miss (actions/cache
+  default behaviour), so both builds and warm-cache runs keep it alive.
+
+outputs:
+  dir:
+    description: Resolved ccache directory path
+    value: ${{ steps.resolve.outputs.dir }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install ccache
+      shell: bash
+      run: |
+        if [[ "$RUNNER_OS" == "Linux" ]]; then
+          sudo apt-get install -y ccache
+        else
+          brew install ccache
+        fi
+
+    - name: Resolve ccache dir
+      id: resolve
+      shell: bash
+      run: echo "dir=$(ccache --get-config cache_dir)" >> "$GITHUB_OUTPUT"
+
+    - name: Restore / save ccache
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.resolve.outputs.dir }}
+        # Bust on dep changes — most C comes from Ansible/grpc, not our code.
+        # runner.arch separates linux/amd64 from linux/arm64 on the same runner.os.
+        key: nuitka-ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('uv.lock') }}
+        restore-keys: |
+          nuitka-ccache-${{ runner.os }}-${{ runner.arch }}-

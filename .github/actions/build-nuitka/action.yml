@@ -1,39 +1,11 @@
 name: Build Nuitka binary
 description: >
-  Install ccache, restore the ccache cache, compile the provider with Nuitka,
-  and produce dist/terraform-provider-terrible.
+  Compile the provider with Nuitka. Assumes uv dependencies are installed
+  and ccache is set up (run setup-ccache first).
 
 runs:
   using: composite
   steps:
-    - name: Install ccache
-      shell: bash
-      run: |
-        if [[ "$RUNNER_OS" == "Linux" ]]; then
-          sudo apt-get install -y ccache
-        else
-          brew install ccache
-        fi
-
-    - name: Resolve ccache dir
-      id: ccache
-      shell: bash
-      run: |
-        # ccache 4+ uses XDG on Linux (~/.cache/ccache) and
-        # ~/Library/Caches/ccache on macOS. Let ccache tell us.
-        echo "dir=$(ccache --get-config cache_dir)" >> "$GITHUB_OUTPUT"
-
-    - name: Restore ccache cache
-      uses: actions/cache@v4
-      with:
-        path: ${{ steps.ccache.outputs.dir }}
-        # Bust when Python deps change — most Nuitka C comes from Ansible/grpc,
-        # so uv.lock is the right granularity. runner.arch differentiates
-        # linux/amd64 from linux/arm64 on the same runner.os.
-        key: nuitka-ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('uv.lock') }}
-        restore-keys: |
-          nuitka-ccache-${{ runner.os }}-${{ runner.arch }}-
-
     - name: Build
       shell: bash
       run: |
