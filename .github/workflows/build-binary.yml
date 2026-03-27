@@ -58,4 +58,5 @@ jobs:
       - name: Smoke test binary
         run: |
           ls -lh dist/terraform-provider-terrible
-          timeout 10 dist/terraform-provider-terrible --help || true
+          # Start in dev mode; verify it emits TF_REATTACH_PROVIDERS within 10s
+          timeout 10 dist/terraform-provider-terrible --dev 2>&1 | grep -q TF_REATTACH_PROVIDERS
