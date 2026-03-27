@@ -69,6 +69,7 @@ example-fresh: install-provider
 build-binary:
 	uv run python -m nuitka \
 		--onefile \
+		--jobs=1 \
 		--assume-yes-for-downloads \
 		--include-package=ansible \
 		--include-package=ansible_collections \
