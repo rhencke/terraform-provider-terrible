@@ -5,7 +5,7 @@ description = "Terraform provider that exposes Ansible modules as Terraform-mana
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "ansible>=13.3.0",
+    "ansible-core>=2.18.0",
     "tf",
     "pywinrm>=0.4.0",
 ]
